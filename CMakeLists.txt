@@ -24,9 +24,7 @@ add_sources(glulxe "glulxe/"
 emglken_vm(glulxe)
 target_compile_definitions(glulxe PRIVATE OS_UNIX)
 target_compile_options(glulxe PRIVATE -Wall -Wmissing-prototypes -Wno-unused)
-#target_link_options(glulxe PRIVATE -sASYNCIFY_IGNORE_INDIRECT)
-#target_link_options(glulxe PRIVATE -sASYNCIFY_ADD=@${CMAKE_CURRENT_LIST_DIR}/src/add-list-glulxe.txt)
-#target_link_options(glulxe PRIVATE -sASYNCIFY_REMOVE=@${CMAKE_CURRENT_LIST_DIR}/src/remove-list-glulxe.txt)
+target_link_options(glulxe PRIVATE -sASYNCIFY_IGNORE_INDIRECT)
 
 #[[
 add_executable(glulxe-profiler-core)
@@ -63,6 +61,7 @@ add_sources(git "git/"
 emglken_vm(git)
 target_compile_definitions(git PRIVATE USE_DIRECT_THREADING USE_INLINE)
 target_compile_options(git PRIVATE -Wall -Wno-int-conversion -Wno-pointer-sign -Wno-unused-but-set-variable)
+target_link_options(git PRIVATE -sASYNCIFY_IGNORE_INDIRECT)
 
 add_executable(hugo)
 add_sources(hugo "hugo/source/"
@@ -72,6 +71,7 @@ add_sources(hugo "hugo/heglk/"
 emglken_vm(hugo)
 target_compile_definitions(hugo PRIVATE COMPILE_V25 GLK NO_KEYPRESS_CURSOR HUGO_INLINE=static\ inline)
 target_compile_options(hugo PRIVATE -Wall -Wno-unused-but-set-variable)
+target_link_options(hugo PRIVATE -sASYNCIFY_IGNORE_INDIRECT)
 
 add_executable(scare)
 add_sources(scare "garglk/terps/scare/"
