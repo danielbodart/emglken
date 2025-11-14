@@ -52,6 +52,7 @@ target_compile_options(bocfel PRIVATE -Wall)
 # Bocfel now uses exceptions, which takes a little bit to set up
 target_compile_options(bocfel PRIVATE -fexceptions)
 target_link_options(bocfel PRIVATE -sNO_DISABLE_EXCEPTION_CATCHING)
+target_link_options(bocfel PRIVATE -sASYNCIFY_REMOVE=@${CMAKE_CURRENT_LIST_DIR}/src/asyncify-remove-list-bocfel.txt)
 
 add_executable(git)
 add_sources(git "git/"
