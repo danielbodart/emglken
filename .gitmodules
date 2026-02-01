@@ -1,6 +1,3 @@
-[submodule "asyncglk"]
-	path = asyncglk
-	url = ../../curiousdannii/asyncglk.git
 [submodule "garglk"]
 	path = garglk
 	url = ../../garglk/garglk.git
@@ -13,9 +10,3 @@
 [submodule "hugo"]
 	path = hugo
 	url = ../../hugoif/hugo-unix.git
-[submodule "remglk"]
-	path = remglk
-	url = ../../curiousdannii/remglk-rs.git
-[submodule "tads"]
-	path = tads
-	url = ../../tads-intfic/tads-runner.git

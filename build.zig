@@ -24,12 +24,13 @@ pub fn build(b: *std.Build) void {
     const wasi_glk = buildWasiGlk(b, target, optimize);
 
     // Build all interpreters
+    // Note: git requires setjmp (needs WASM exception handling)
+    // Note: bocfel requires fstream (not available in WASI libc++)
     const interpreters = .{
         .{ "glulxe", "Build Glulxe interpreter", buildGlulxe },
-        .{ "git", "Build Git interpreter", buildGit },
+        // .{ "git", "Build Git interpreter", buildGit },
         .{ "hugo", "Build Hugo interpreter", buildHugo },
-        .{ "bocfel", "Build Bocfel interpreter", buildBocfel },
-        .{ "scare", "Build Scare interpreter", buildScare },
+        // .{ "bocfel", "Build Bocfel interpreter", buildBocfel },
     };
 
     inline for (interpreters) |info| {
@@ -45,7 +46,7 @@ fn buildWasiGlk(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
     return b.addObject(.{
         .name = "wasi_glk",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/wasi-glk/wasi_glk.zig"),
+            .root_source_file = b.path("src/wasi_glk.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
@@ -176,37 +177,12 @@ fn buildBocfel(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bu
     return exe;
 }
 
-fn buildScare(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, wasi_glk: *std.Build.Step.Compile) *std.Build.Step.Compile {
-    const exe = b.addExecutable(.{
-        .name = "scare",
-        .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
-    });
-
-    exe.addCSourceFiles(.{
-        .root = b.path("garglk/terps/scare"),
-        .files = &.{
-            "os_glk.c",   "scdebug.c",  "scevents.c", "scexpr.c",
-            "scgamest.c", "scinterf.c", "sclibrar.c", "sclocale.c",
-            "scmemos.c",  "scnpcs.c",   "scobjcts.c", "scparser.c",
-            "scprintf.c", "scprops.c",  "scresour.c", "screstrs.c",
-            "scrunner.c", "scserial.c", "sctaffil.c", "sctafpar.c",
-            "sctasks.c",  "scutils.c",  "scvars.c",
-        },
-        .flags = &.{ "-Wall", "-D_WASI_EMULATED_SIGNAL" },
-    });
-
-    addGlkSupport(exe, b, wasi_glk, false);
-    exe.addIncludePath(b.path("garglk/terps/scare"));
-
-    return exe;
-}
-
 // Helper to add common Glk support to an executable
 fn addGlkSupport(exe: *std.Build.Step.Compile, b: *std.Build, wasi_glk: *std.Build.Step.Compile, include_dispa: bool) void {
     exe.addObject(wasi_glk);
 
     exe.addCSourceFiles(.{
-        .root = b.path("remglk/remglk_capi/src/glk"),
+        .root = b.path("src"),
         .files = if (include_dispa)
             &.{ "gi_dispa.c", "gi_blorb.c" }
         else
@@ -214,7 +190,6 @@ fn addGlkSupport(exe: *std.Build.Step.Compile, b: *std.Build, wasi_glk: *std.Bui
         .flags = &.{"-D_WASI_EMULATED_SIGNAL"},
     });
 
-    exe.addIncludePath(b.path("src/wasi-glk"));
-    exe.addIncludePath(b.path("remglk/remglk_capi/src/glk"));
+    exe.addIncludePath(b.path("src"));
     exe.linkLibC();
 }

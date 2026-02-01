@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emglken JSPI Test - Colossal Cave Adventure</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .status.info { background: #16213e; border: 1px solid #0f3460; }
+        .status.error { background: #4a1515; border: 1px solid #8b0000; }
+        .status.success { background: #154a15; border: 1px solid #006400; }
+        #game-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #output {
+            background: #0f0f23;
+            border: 1px solid #333;
+            padding: 15px;
+            min-height: 400px;
+            max-height: 70vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.4;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        #output .room-name {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        #output .input-echo {
+            color: #888;
+        }
+        #input-container {
+            display: flex;
+            gap: 10px;
+        }
+        #input {
+            flex: 1;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 16px;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            color: #eee;
+            border-radius: 4px;
+        }
+        #input:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        #input:disabled {
+            opacity: 0.5;
+        }
+        button {
+            padding: 10px 20px;
+            font-family: inherit;
+            font-size: 16px;
+            background: #0f3460;
+            border: 1px solid #00d4ff;
+            color: #00d4ff;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #16213e;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #00d4ff;
+        }
+        .instructions code {
+            background: #0f0f23;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Colossal Cave Adventure</h1>
+        <div id="status" class="status info">Checking JSPI support...</div>
+
+        <div id="output"></div>
+
+        <div id="input-container">
+            <input type="text" id="input" placeholder="Enter command..." disabled autocomplete="off" />
+            <button id="send" disabled>Send</button>
+        </div>
+
+        <div class="instructions">
+            <h3>About This Demo</h3>
+            <p>This runs the Glulxe interpreter compiled to WebAssembly (WASI), using
+            <strong>JSPI (JavaScript Promise Integration)</strong> to handle async I/O in the browser.</p>
+            <p>Try commands like: <code>look</code>, <code>go north</code>, <code>inventory</code>, <code>help</code></p>
+            <h3>Requirements</h3>
+            <p>JSPI requires Chrome 131+ (enabled by default) or earlier versions with the flag:
+            <code>chrome://flags/#enable-experimental-webassembly-jspi</code></p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { runWithJSPI } from './jspi-wasi.js';
+
+        const outputEl = document.getElementById('output');
+        const inputEl = document.getElementById('input');
+        const sendBtn = document.getElementById('send');
+        const statusEl = document.getElementById('status');
+
+        // Check JSPI support
+        function checkJSPISupport() {
+            try {
+                if (typeof WebAssembly.Suspending === 'undefined') {
+                    return { supported: false, reason: 'WebAssembly.Suspending not available' };
+                }
+                if (typeof WebAssembly.promising === 'undefined') {
+                    return { supported: false, reason: 'WebAssembly.promising not available' };
+                }
+                return { supported: true };
+            } catch (e) {
+                return { supported: false, reason: e.message };
+            }
+        }
+
+        // Input queue for the interpreter
+        let inputResolve = null;
+        const pendingInput = [];
+
+        function getInput() {
+            return new Promise(resolve => {
+                if (pendingInput.length > 0) {
+                    resolve(pendingInput.shift());
+                } else {
+                    inputResolve = resolve;
+                }
+            });
+        }
+
+        function submitInput(text) {
+            if (inputResolve) {
+                const resolve = inputResolve;
+                inputResolve = null;
+                resolve(text);
+            } else {
+                pendingInput.push(text);
+            }
+        }
+
+        // Output handling
+        function appendOutput(text) {
+            outputEl.textContent += text;
+            outputEl.scrollTop = outputEl.scrollHeight;
+        }
+
+        function handleRemGlkOutput(msg) {
+            console.log('RemGlk:', msg);
+
+            if (msg.type === 'init') {
+                statusEl.textContent = 'Game initialized!';
+                statusEl.className = 'status success';
+                return;
+            }
+
+            if (msg.type === 'update') {
+                // Handle content updates
+                if (msg.content) {
+                    for (const content of msg.content) {
+                        if (content.text) {
+                            // Handle array of text spans or raw text
+                            if (Array.isArray(content.text)) {
+                                for (const span of content.text) {
+                                    if (typeof span === 'string') {
+                                        appendOutput(span);
+                                    } else if (span.text) {
+                                        appendOutput(span.text);
+                                    }
+                                }
+                            } else {
+                                appendOutput(content.text);
+                            }
+                        }
+                        if (content.clear) {
+                            outputEl.textContent = '';
+                        }
+                    }
+                }
+
+                // Enable input if requested
+                if (msg.input && msg.input.length > 0) {
+                    inputEl.disabled = false;
+                    sendBtn.disabled = false;
+                    inputEl.focus();
+                }
+            }
+
+            if (msg.type === 'error') {
+                statusEl.textContent = 'Error: ' + msg.message;
+                statusEl.className = 'status error';
+            }
+        }
+
+        // Event handlers
+        function handleSend() {
+            const text = inputEl.value.trim();
+            if (text) {
+                appendOutput('\n> ' + text + '\n\n');
+                inputEl.value = '';
+                inputEl.disabled = true;
+                sendBtn.disabled = true;
+                submitInput(text);
+            }
+        }
+
+        inputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSend();
+            }
+        });
+
+        sendBtn.addEventListener('click', handleSend);
+
+        // Main
+        async function main() {
+            // Check JSPI support
+            const jspiCheck = checkJSPISupport();
+            if (!jspiCheck.supported) {
+                statusEl.textContent = `JSPI not supported: ${jspiCheck.reason}. Enable chrome://flags/#enable-experimental-webassembly-jspi`;
+                statusEl.className = 'status error';
+                return;
+            }
+
+            statusEl.textContent = 'JSPI supported! Loading interpreter...';
+            statusEl.className = 'status info';
+
+            try {
+                // Load the WASM module
+                const wasmResponse = await fetch('glulxe.wasm');
+                if (!wasmResponse.ok) {
+                    throw new Error(`Failed to load glulxe.wasm: ${wasmResponse.status}`);
+                }
+                const wasmBytes = await wasmResponse.arrayBuffer();
+
+                statusEl.textContent = 'Loading story file...';
+
+                // Load the story file
+                const storyResponse = await fetch('advent.ulx');
+                if (!storyResponse.ok) {
+                    throw new Error(`Failed to load advent.ulx: ${storyResponse.status}`);
+                }
+                const storyData = new Uint8Array(await storyResponse.arrayBuffer());
+
+                statusEl.textContent = 'Starting interpreter...';
+
+                // Run with JSPI
+                await runWithJSPI(wasmBytes, {
+                    args: ['glulxe', 'story.ulx'],
+                    storyData,
+                    onOutput: handleRemGlkOutput,
+                    getInput,
+                });
+
+                statusEl.textContent = 'Game ended.';
+                statusEl.className = 'status info';
+            } catch (e) {
+                console.error('Error:', e);
+                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.className = 'status error';
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

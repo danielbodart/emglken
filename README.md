@@ -1,31 +1,78 @@
-Emglken: Glk meets Emscripten
-=============================
+# Emglken
 
-Over the years many Interactive Fiction interpreters have been written which use the Glk API, or have been adapted to do so. Emglken takes some of these interpreters, compiles them to use the [RemGlk-rs](https://github.com/curiousdannii/remglk-rs) Glk library using [Emscripten](https://emscripten.org/), and then outputs to Javascript and WebAssembly. These interpreters, which once needed to be compiled for each distinct operating system and CPU combination, can now be run anywhere there's a modern Javascript runtime: on the web with [Parchment](https://github.com/curiousdannii/parchment), in desktop apps like [Lectrote](https://github.com/erkyrath/lectrote), or in Node.js directly.
+Interactive Fiction interpreters compiled to WebAssembly (WASI) using Zig.
 
-Emglken itself has almost no code at all; this project basically just takes care of compiling all the pieces together with the right settings, as well as providing a common JS interface to handle setting up the connections between each interpreter and GlkOte.
+## Overview
 
-npm package and console app
----------------------------
+Emglken compiles IF interpreters to WebAssembly with WASI, enabling them to run in browsers using [JSPI (JavaScript Promise Integration)](https://github.com/aspect-labs/aspect-engineering/blob/main/aspect-blog/2024-10-16-async-wasm.md) or in any WASI-compatible runtime.
 
-Emglken has been published to the [npm package repository](https://www.npmjs.com/package/emglken). You can install the emglken package and use each interpreter as you wish. A basic console app is also provided, just run `emglken` with the path to the storyfile you want to run.
+The interpreters use a Glk implementation (`src/wasi_glk.zig`) that communicates via JSON over stdin/stdout, compatible with the RemGlk protocol.
+
+## Building
+
+Requires [Zig 0.15+](https://ziglang.org/).
+
+```bash
+# Build all interpreters
+zig build -Doptimize=ReleaseSmall
+
+# Build specific interpreter
+zig build glulxe -Doptimize=ReleaseSmall
+
+# Output in zig-out/bin/
+ls zig-out/bin/*.wasm
+```
+
+## Interpreters
+
+| Name | Format | License | Status |
+|------|--------|---------|--------|
+| [Glulxe](https://github.com/erkyrath/glulxe) | Glulx (.ulx, .gblorb) | MIT | Working |
+| [Hugo](https://github.com/hugoif/hugo-unix) | Hugo (.hex) | BSD-2-Clause | Working |
+| [Git](https://github.com/DavidKinder/Git) | Glulx | MIT | Needs setjmp support |
+| [Bocfel](https://github.com/garglk/garglk) | Z-machine (.z3-.z8) | MIT | Needs fstream support |
+
+## Browser Usage with JSPI
+
+See `examples/jspi-browser/` for a complete browser example using JSPI.
+
+JSPI allows WebAssembly to suspend execution while waiting for async JavaScript operations (like user input), without requiring Asyncify transformation.
+
+**Browser Support:**
+- Chrome 131+: JSPI enabled by default
+- Chrome 128-130: Enable `chrome://flags/#enable-experimental-webassembly-jspi`
+
+```javascript
+import { runWithJSPI } from './jspi-wasi.js';
+
+await runWithJSPI(wasmBytes, {
+    args: ['glulxe', 'story.ulx'],
+    storyData: storyFileBytes,
+    onOutput: (json) => { /* handle RemGlk output */ },
+    getInput: async () => { /* return user input */ },
+});
+```
+
+## Project Structure
 
 ```
-emglken storyfile.gblorb
+emglken/
+├── build.zig           # Zig build configuration
+├── src/
+│   ├── wasi_glk.zig    # Zig Glk implementation
+│   ├── glk.h           # Glk API header
+│   ├── gi_dispa.c      # Glk dispatch layer
+│   └── gi_blorb.c      # Blorb support
+├── glulxe/             # Glulxe interpreter (submodule)
+├── hugo/               # Hugo interpreter (submodule)
+├── git/                # Git interpreter (submodule)
+├── garglk/             # Garglk (contains Bocfel)
+└── examples/
+    └── jspi-browser/   # Browser JSPI example
 ```
 
-Included Projects
------------------
+## License
 
-Emglken, RemGlk-rs and AsyncGlk (used by the console app) are MIT licensed, as are some of the interpreters, but others are licensed under other Free Software licenses as listed below.
+MIT. See [LICENSE](LICENSE) for details.
 
-Name   | Upstream repo | License
------- | ------------- | -------
-AsyncGlk | [curiousdannii/asyncglk](https://github.com/curiousdannii/asyncglk) | [MIT](https://github.com/curiousdannii/asyncglk/blob/master/LICENSE)
-Bocfel | [garglk/garglk](https://github.com/garglk/garglk) | [MIT](https://github.com/garglk/garglk/blob/master/terps/bocfel/LICENSE)
-Git    | [DavidKinder/Git](https://github.com/DavidKinder/Git) | [MIT](https://github.com/DavidKinder/Git/blob/master/README.txt)
-Glulxe | [erkyrath/glulxe](https://github.com/erkyrath/glulxe) | [MIT](https://github.com/erkyrath/glulxe/blob/master/LICENSE)
-Hugo   | [hugoif/hugo-unix](https://github.com/hugoif/hugo-unix) | [BSD-2-Clause](https://github.com/hugoif/hugo-unix/blob/master/License.txt)
-RemGlk-rs | [curiousdannii/remglk-rs](https://github.com/curiousdannii/remglk-rs) | [MIT](https://github.com/curiousdannii/remglk-rs/blob/master/LICENSE)
-Scare  | [garglk/garglk](https://github.com/garglk/garglk) | [GPL-2.0](https://github.com/garglk/garglk/blob/master/terps/scare/COPYING)
-TADS   | [tads-intfic/tads-runner](https://github.com/tads-intfic/tads-runner) | [GPL-2.0](https://github.com/tads-intfic/tads-runner/blob/master/COPYING)
+Individual interpreters retain their original licenses (MIT or BSD-2-Clause).
