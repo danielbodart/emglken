@@ -25,12 +25,12 @@ ls zig-out/bin/*.wasm
 
 ## Interpreters
 
-| Name | Format | License | Status |
-|------|--------|---------|--------|
-| [Glulxe](https://github.com/erkyrath/glulxe) | Glulx (.ulx, .gblorb) | MIT | Working |
-| [Hugo](https://github.com/hugoif/hugo-unix) | Hugo (.hex) | BSD-2-Clause | Working |
-| [Git](https://github.com/DavidKinder/Git) | Glulx | MIT | Needs setjmp support |
-| [Bocfel](https://github.com/garglk/garglk) | Z-machine (.z3-.z8) | MIT | Needs fstream support |
+| Name | Language | Format | License | Status |
+|------|----------|--------|---------|--------|
+| [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx (.ulx, .gblorb) | MIT | Working |
+| [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo (.hex) | BSD-2-Clause | Working |
+| [Git](https://github.com/DavidKinder/Git) | C | Glulx | MIT | Needs setjmp support |
+| [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine (.z3-.z8) | MIT | Needs fstream support |
 
 ## Browser Usage with JSPI
 
