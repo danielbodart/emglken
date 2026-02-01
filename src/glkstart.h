@@ -56,13 +56,11 @@ extern int glkunix_startup_code(glkunix_startup_t *data);
 #define GLKUNIX_FILEREF_GET_FILENAME (1)
 
 extern void glkunix_set_base_file(char *filename);
-extern strid_t glkunix_stream_open_pathname_gen(char *pathname, 
+extern strid_t glkunix_stream_open_pathname_gen(char *pathname,
     glui32 writemode, glui32 textmode, glui32 rock);
-extern strid_t glkunix_stream_open_pathname(char *pathname, glui32 textmode, 
+extern strid_t glkunix_stream_open_pathname(char *pathname, glui32 textmode,
     glui32 rock);
-#ifdef GLKUNIX_FILEREF_GET_FILENAME
 extern const char *glkunix_fileref_get_filename(frefid_t fref);
-#endif
 
 #ifdef __cplusplus
 }

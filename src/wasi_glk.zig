@@ -195,6 +195,8 @@ const FileRefData = struct {
     filename: []const u8,
     usage: glui32,
     textmode: bool,
+    // Lazily allocated null-terminated copy for C interop (glkunix_fileref_get_filename)
+    filename_cstr: ?[*:0]const u8 = null,
     // Dispatch rock for Glulxe
     dispatch_rock: DispatchRock = .{ .num = 0 },
     prev: ?*FileRefData = null,
@@ -1213,6 +1215,11 @@ export fn glk_fileref_destroy(fref_opaque: frefid_t) callconv(.c) void {
     if (f.prev) |p| p.next = f.next else fileref_list = f.next;
     if (f.next) |n| n.prev = f.prev;
 
+    // Free the C string copy if it was allocated
+    if (f.filename_cstr) |cstr| {
+        const slice: [:0]const u8 = std.mem.span(cstr);
+        allocator.free(slice);
+    }
     allocator.free(f.filename);
     allocator.destroy(f);
 }
@@ -1248,6 +1255,22 @@ export fn glk_fileref_does_file_exist(fref_opaque: frefid_t) callconv(.c) glui32
     if (fref == null) return 0;
     _ = std.fs.cwd().statFile(fref.?.filename) catch return 0;
     return 1;
+}
+
+// Unix Glk extension: get filename from fileref as C string
+// The returned pointer is valid until the fileref is destroyed
+export fn glkunix_fileref_get_filename(fref_opaque: frefid_t) callconv(.c) ?[*:0]const u8 {
+    const fref: ?*FileRefData = @ptrCast(@alignCast(fref_opaque));
+    if (fref == null) return null;
+    const f = fref.?;
+
+    // Return cached C string if already allocated
+    if (f.filename_cstr) |cstr| return cstr;
+
+    // Allocate null-terminated copy
+    const cstr = allocator.dupeZ(u8, f.filename) catch return null;
+    f.filename_cstr = cstr.ptr;
+    return cstr.ptr;
 }
 
 // ============== Event Functions ==============

@@ -23,13 +23,11 @@ pub fn build(b: *std.Build) void {
     // Build WASI-Glk as a compiled object (shared by all interpreters)
     const wasi_glk = buildWasiGlk(b, target, optimize);
 
-    // Build all interpreters
-    // Note: bocfel requires fstream (not available in WASI libc++)
+    // Build all interpreters (C-based, work on both native and WASM)
     const interpreters = .{
         .{ "glulxe", "Build Glulxe interpreter", buildGlulxe },
         .{ "git", "Build Git interpreter", buildGit },
         .{ "hugo", "Build Hugo interpreter", buildHugo },
-        // .{ "bocfel", "Build Bocfel interpreter", buildBocfel },
     };
 
     inline for (interpreters) |info| {
@@ -37,6 +35,18 @@ pub fn build(b: *std.Build) void {
         const install = b.addInstallArtifact(exe, .{});
         b.step(info[0], info[1]).dependOn(&install.step);
         b.getInstallStep().dependOn(&install.step);
+    }
+
+    // Bocfel (C++) - native only for now
+    // WASM builds blocked by: wasi-sdk doesn't ship libc++/libc++abi with C++ exception support.
+    // Bocfel uses exceptions for control flow (restart, quit, restore) - cannot compile with -fno-exceptions.
+    // Tracking: https://github.com/WebAssembly/wasi-sdk/issues/565
+    // Workaround: https://gist.github.com/yerzham/302efcec6a2e82c1e8de4aed576ea29d
+    if (is_native) {
+        const bocfel = buildBocfel(b, target, optimize, wasi_glk);
+        const bocfel_install = b.addInstallArtifact(bocfel, .{});
+        b.step("bocfel", "Build Bocfel interpreter (native only)").dependOn(&bocfel_install.step);
+        b.getInstallStep().dependOn(&bocfel_install.step);
     }
 }
 
@@ -192,6 +202,19 @@ fn buildBocfel(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bu
         .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
     });
 
+    // Note: For WASM builds (future), would need:
+    //   - ZTERP_GLK_NO_STDIO (route file I/O through Glk, not stdio)
+    //   - fstream stubs (bocfel uses std::ifstream for config/patches)
+    //   - C++ exception support in wasi-sdk
+    const bocfel_flags: []const []const u8 = &.{
+        "-DZTERP_GLK",
+        "-DZTERP_GLK_BLORB",
+        "-DZTERP_GLK_UNIX",
+        "-Wall",
+        "-std=c++14",
+        "-fexceptions", // Required - bocfel uses exceptions for control flow
+    };
+
     exe.addCSourceFiles(.{
         .root = b.path("garglk/terps/bocfel"),
         .files = &.{
@@ -202,13 +225,7 @@ fn buildBocfel(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bu
             "screen.cpp",   "sound.cpp",   "stack.cpp",   "stash.cpp",
             "unicode.cpp",  "util.cpp",    "zoom.cpp",    "zterp.cpp",
         },
-        .flags = &.{
-            "-DZTERP_GLK",             "-DZTERP_GLK_BLORB",
-            "-DZTERP_GLK_NO_STDIO",    "-DZTERP_GLK_UNIX",
-            "-DZTERP_NO_SAFETY_CHECKS", "-Wall",
-            "-std=c++14",              "-fexceptions", // Required for save/restore
-            "-D_WASI_EMULATED_SIGNAL",
-        },
+        .flags = bocfel_flags,
     });
 
     addGlkSupport(exe, b, wasi_glk, false);

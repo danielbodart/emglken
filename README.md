@@ -27,12 +27,26 @@ ls zig-out/bin/*.wasm
 
 ## Interpreters
 
-| Name | Language | Format | License | Status |
-|------|----------|--------|---------|--------|
-| [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx (.ulx, .gblorb) | MIT | Working |
-| [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo (.hex) | BSD-2-Clause | Working |
-| [Git](https://github.com/DavidKinder/Git) | C | Glulx | MIT | Working (requires wasi-sdk) |
-| [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine (.z3-.z8) | MIT | Needs fstream support |
+| Name | Language | Format | License | WASM | Native |
+|------|----------|--------|---------|------|--------|
+| [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx (.ulx, .gblorb) | MIT | ✅ | ✅ |
+| [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo (.hex) | BSD-2-Clause | ✅ | ✅ |
+| [Git](https://github.com/DavidKinder/Git) | C | Glulx | MIT | ✅ (requires wasi-sdk) | ✅ |
+| [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine (.z3-.z8) | MIT | ❌ (see below) | ✅ |
+
+### Bocfel WASM Status
+
+Bocfel is a C++ interpreter that uses exceptions for control flow (restart, quit, restore operations). WASM builds are currently blocked because wasi-sdk doesn't ship `libc++`/`libc++abi` compiled with C++ exception support.
+
+**What's needed for WASM support:**
+- wasi-sdk built with `LIBCXX_ENABLE_EXCEPTIONS=ON`, `LIBCXXABI_ENABLE_EXCEPTIONS=ON`, and `libunwind`
+- Compile flags: `-fwasm-exceptions -mllvm -wasm-use-legacy-eh=false`
+- Link flags: `-lunwind`
+- Additionally needs fstream stubs (bocfel uses `std::ifstream` for optional config/patch files)
+
+**Tracking:**
+- [wasi-sdk#565](https://github.com/WebAssembly/wasi-sdk/issues/565) - C++ exception support tracking issue
+- [Build instructions gist](https://gist.github.com/yerzham/302efcec6a2e82c1e8de4aed576ea29d) - How to build wasi-sdk with exception support (requires LLVM 21.1.5+)
 
 ## Browser Usage with JSPI
 
