@@ -23,6 +23,9 @@ pub fn build(b: *std.Build) void {
     // Build WASI-Glk as a compiled object (shared by all interpreters)
     const wasi_glk = buildWasiGlk(b, target, optimize);
 
+    // Build zlib (used by Scare)
+    const zlib = buildZlib(b, target, optimize);
+
     // Build all interpreters (C-based, work on both native and WASM)
     const interpreters = .{
         .{ "glulxe", "Build Glulxe interpreter", buildGlulxe },
@@ -37,10 +40,15 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&install.step);
     }
 
-    // Native-only interpreters
-    // - Bocfel/TADS: WASM blocked by wasi-sdk lacking C++ exception support
-    //   Tracking: https://github.com/WebAssembly/wasi-sdk/issues/565
-    // - Scare: WASM blocked by zlib dependency (wasi-sdk doesn't include zlib)
+    // Scare (needs zlib, works on both native and WASM)
+    const scare = buildScare(b, target, optimize, wasi_glk, zlib);
+    const scare_install = b.addInstallArtifact(scare, .{});
+    b.step("scare", "Build Scare interpreter (ADRIFT)").dependOn(&scare_install.step);
+    b.getInstallStep().dependOn(&scare_install.step);
+
+    // Native-only interpreters (C++ with exceptions)
+    // WASM blocked by wasi-sdk lacking C++ exception support
+    // Tracking: https://github.com/WebAssembly/wasi-sdk/issues/565
     if (is_native) {
         const bocfel = buildBocfel(b, target, optimize, wasi_glk);
         const bocfel_install = b.addInstallArtifact(bocfel, .{});
@@ -51,11 +59,6 @@ pub fn build(b: *std.Build) void {
         const tads_install = b.addInstallArtifact(tads, .{});
         b.step("tads", "Build TADS 2/3 interpreter (native only)").dependOn(&tads_install.step);
         b.getInstallStep().dependOn(&tads_install.step);
-
-        const scare = buildScare(b, target, optimize, wasi_glk);
-        const scare_install = b.addInstallArtifact(scare, .{});
-        b.step("scare", "Build Scare interpreter (native only)").dependOn(&scare_install.step);
-        b.getInstallStep().dependOn(&scare_install.step);
     }
 }
 
@@ -70,6 +73,47 @@ fn buildWasiGlk(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
             .link_libc = true,
         }),
     });
+}
+
+// Build zlib as a static library
+fn buildZlib(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.Compile {
+    const lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "z",
+        .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
+    });
+
+    const zlib_flags: []const []const u8 = &.{
+        "-DHAVE_UNISTD_H",
+        "-DHAVE_STDARG_H",
+    };
+
+    lib.addCSourceFiles(.{
+        .root = b.path("zlib"),
+        .files = &.{
+            "adler32.c",
+            "crc32.c",
+            "deflate.c",
+            "infback.c",
+            "inffast.c",
+            "inflate.c",
+            "inftrees.c",
+            "trees.c",
+            "zutil.c",
+            "compress.c",
+            "uncompr.c",
+            "gzclose.c",
+            "gzlib.c",
+            "gzread.c",
+            "gzwrite.c",
+        },
+        .flags = zlib_flags,
+    });
+
+    lib.addIncludePath(b.path("zlib"));
+    lib.linkLibC();
+
+    return lib;
 }
 
 fn buildGlulxe(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, wasi_glk: *std.Build.Step.Compile) *std.Build.Step.Compile {
@@ -205,36 +249,79 @@ fn buildHugo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     return exe;
 }
 
-fn buildScare(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, wasi_glk: *std.Build.Step.Compile) *std.Build.Step.Compile {
+fn buildScare(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, wasi_glk: *std.Build.Step.Compile, zlib: *std.Build.Step.Compile) *std.Build.Step.Compile {
+    // Scare uses setjmp/longjmp which needs WASM exception handling.
+    const scare_target = if (target.result.cpu.arch == .wasm32)
+        b.resolveTargetQuery(.{
+            .cpu_arch = .wasm32,
+            .os_tag = .wasi,
+            .cpu_features_add = std.Target.wasm.featureSet(&.{.exception_handling}),
+        })
+    else
+        target;
+
     const exe = b.addExecutable(.{
         .name = "scare",
-        .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
+        .root_module = b.createModule(.{ .target = scare_target, .optimize = optimize }),
     });
 
-    const scare_flags: []const []const u8 = &.{
-        "-Wall",
-        "-Wno-pointer-sign",
-        "-D_WASI_EMULATED_SIGNAL",
-        "-DSCARE_NO_ABBREVIATIONS",
+    const scare_files = &[_][]const u8{
+        "sctafpar.c",  "sctaffil.c", "scprops.c",  "scvars.c",
+        "scexpr.c",    "scprintf.c", "scinterf.c", "scparser.c",
+        "sclibrar.c",  "scrunner.c", "scevents.c", "scnpcs.c",
+        "scobjcts.c",  "sctasks.c",  "screstrs.c", "scgamest.c",
+        "scserial.c",  "scresour.c", "scmemos.c",  "scutils.c",
+        "sclocale.c",  "scdebug.c",  "os_glk.c",
     };
 
-    // Core SCARE interpreter files
-    exe.addCSourceFiles(.{
-        .root = b.path("garglk/terps/scare"),
-        .files = &.{
-            "sctafpar.c",  "sctaffil.c", "scprops.c",  "scvars.c",
-            "scexpr.c",    "scprintf.c", "scinterf.c", "scparser.c",
-            "sclibrar.c",  "scrunner.c", "scevents.c", "scnpcs.c",
-            "scobjcts.c",  "sctasks.c",  "screstrs.c", "scgamest.c",
-            "scserial.c",  "scresour.c", "scmemos.c",  "scutils.c",
-            "sclocale.c",  "scdebug.c",  "os_glk.c",
-        },
-        .flags = scare_flags,
-    });
+    // Different flags for native vs WASM (WASM needs setjmp/longjmp support)
+    if (scare_target.result.cpu.arch == .wasm32) {
+        exe.addCSourceFiles(.{
+            .root = b.path("garglk/terps/scare"),
+            .files = scare_files,
+            .flags = &.{
+                "-Wall",
+                "-Wno-pointer-sign",
+                "-D_WASI_EMULATED_SIGNAL",
+                "-DSCARE_NO_ABBREVIATIONS",
+                "-mllvm", "-wasm-enable-sjlj",
+                "-mllvm", "-wasm-use-legacy-eh=false",
+            },
+        });
+
+        // Link precompiled libsetjmp from wasi-sdk
+        const wasi_sdk_path = std.process.getEnvVarOwned(b.allocator, "WASI_SDK_PATH") catch |err| blk: {
+            if (err == error.EnvironmentVariableNotFound) {
+                const home = std.process.getEnvVarOwned(b.allocator, "HOME") catch break :blk null;
+                break :blk std.fmt.allocPrint(b.allocator, "{s}/.local/share/mise/installs/wasi-sdk/27/wasi-sdk", .{home}) catch null;
+            }
+            break :blk null;
+        };
+        if (wasi_sdk_path) |sdk_path| {
+            const libsetjmp_path = std.fmt.allocPrint(b.allocator, "{s}/share/wasi-sysroot/lib/wasm32-wasi/libsetjmp.a", .{sdk_path}) catch null;
+            if (libsetjmp_path) |path| {
+                exe.addObjectFile(.{ .cwd_relative = path });
+            }
+        }
+    } else {
+        exe.addCSourceFiles(.{
+            .root = b.path("garglk/terps/scare"),
+            .files = scare_files,
+            .flags = &.{
+                "-Wall",
+                "-Wno-pointer-sign",
+                "-D_WASI_EMULATED_SIGNAL",
+                "-DSCARE_NO_ABBREVIATIONS",
+            },
+        });
+    }
 
     addGlkSupport(exe, b, wasi_glk, false);
     exe.addIncludePath(b.path("garglk/terps/scare"));
-    exe.linkSystemLibrary("z"); // zlib for TAF decompression
+
+    // Link zlib (built from source)
+    exe.linkLibrary(zlib);
+    exe.addIncludePath(b.path("zlib"));
 
     return exe;
 }

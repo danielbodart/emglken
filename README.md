@@ -33,14 +33,12 @@ ls zig-out/bin/*.wasm
 | [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo (.hex) | BSD-2-Clause | ✅ | ✅ |
 | [Git](https://github.com/DavidKinder/Git) | C | Glulx | MIT | ✅ (requires wasi-sdk) | ✅ |
 | [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine (.z3-.z8) | MIT | ❌ (C++ exceptions) | ✅ |
-| [Scare](https://github.com/garglk/garglk) | C | ADRIFT (.taf) | GPL-2.0 | ❌ (needs zlib) | ✅ |
+| [Scare](https://github.com/garglk/garglk) | C | ADRIFT (.taf) | GPL-2.0 | ✅ (requires wasi-sdk) | ✅ |
 | [TADS](https://github.com/garglk/garglk) | C/C++ | TADS 2/3 (.gam, .t3) | GPL-2.0 | ❌ (C++ exceptions) | ✅ |
 
 ### Native-Only Interpreters
 
 **Bocfel and TADS** are C++ interpreters that use exceptions for control flow. WASM builds are blocked because wasi-sdk doesn't ship `libc++`/`libc++abi` with C++ exception support.
-
-**Scare** requires zlib for TAF file decompression. WASM builds are blocked because wasi-sdk doesn't include zlib. Could be enabled by bundling zlib source.
 
 **What's needed for C++ WASM support:**
 - wasi-sdk built with `LIBCXX_ENABLE_EXCEPTIONS=ON`, `LIBCXXABI_ENABLE_EXCEPTIONS=ON`, and `libunwind`
