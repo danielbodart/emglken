@@ -27,21 +27,21 @@ ls zig-out/bin/*.wasm
 
 ## Interpreters
 
-| Name | Language | Format | License | WASM | Native |
-|------|----------|--------|---------|------|--------|
-| [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx (.ulx, .gblorb) | MIT | ✅ | ✅ |
-| [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo (.hex) | BSD-2-Clause | ✅ | ✅ |
-| [Git](https://github.com/DavidKinder/Git) | C | Glulx | MIT | ✅ (requires wasi-sdk) | ✅ |
-| [AdvSys](https://github.com/garglk/garglk) | C | AdvSys (.dat) | BSD | ✅ (requires wasi-sdk) | ✅ |
-| [Agility](https://github.com/garglk/garglk) | C | AGT (.agx, .d$$) | GPL-2.0 | ✅ | ✅ |
-| [Alan2](https://github.com/garglk/garglk) | C | Alan 2 (.acd) | Artistic-2.0 | ✅ (requires wasi-sdk) | ✅ |
-| [Alan3](https://github.com/garglk/garglk) | C | Alan 3 (.a3c) | Artistic-2.0 | ✅ (requires wasi-sdk) | ✅ |
-| [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine (.z3-.z8) | MIT | ❌ (C++ exceptions) | ✅ |
-| [JACL](https://github.com/garglk/garglk) | C | JACL (.j2) | GPL-2.0 | ✅ | ✅ |
-| [Level9](https://github.com/garglk/garglk) | C | Level 9 (.l9, .sna) | GPL-2.0 | ✅ | ✅ |
-| [Magnetic](https://github.com/garglk/garglk) | C | Magnetic Scrolls (.mag) | GPL-2.0 | ✅ | ✅ |
-| [Scare](https://github.com/garglk/garglk) | C | ADRIFT (.taf) | GPL-2.0 | ✅ (requires wasi-sdk) | ✅ |
-| [TADS](https://github.com/garglk/garglk) | C/C++ | TADS 2/3 (.gam, .t3) | GPL-2.0 | ❌ (C++ exceptions) | ✅ |
+| Name | Language | Format | Extensions | License | WASM | Native |
+|------|----------|--------|------------|---------|------|--------|
+| [AdvSys](https://github.com/garglk/garglk) | C | AdvSys | .dat | BSD | ✅ | ✅ |
+| [Agility](https://github.com/garglk/garglk) | C | AGT | .agx, .d$$ | GPL-2.0 | ✅ | ✅ |
+| [Alan2](https://github.com/garglk/garglk) | C | Alan 2 | .acd | Artistic-2.0 | ✅ | ✅ |
+| [Alan3](https://github.com/garglk/garglk) | C | Alan 3 | .a3c | Artistic-2.0 | ✅ | ✅ |
+| [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine | .z3-.z8 | MIT | ❌ (C++ exceptions) | ✅ |
+| [Git](https://github.com/DavidKinder/Git) | C | Glulx | .ulx, .gblorb | MIT | ✅ | ✅ |
+| [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx | .ulx, .gblorb | MIT | ✅ | ✅ |
+| [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo | .hex | BSD-2-Clause | ✅ | ✅ |
+| [JACL](https://github.com/garglk/garglk) | C | JACL | .j2 | GPL-2.0 | ✅ | ✅ |
+| [Level9](https://github.com/garglk/garglk) | C | Level 9 | .l9, .sna | GPL-2.0 | ✅ | ✅ |
+| [Magnetic](https://github.com/garglk/garglk) | C | Magnetic Scrolls | .mag | GPL-2.0 | ✅ | ✅ |
+| [Scare](https://github.com/garglk/garglk) | C | ADRIFT | .taf | GPL-2.0 | ✅ | ✅ |
+| [TADS](https://github.com/garglk/garglk) | C/C++ | TADS 2/3 | .gam, .t3 | GPL-2.0 | ❌ (C++ exceptions) | ✅ |
 
 ### Native-Only Interpreters
 
