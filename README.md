@@ -6,23 +6,26 @@ Interactive Fiction interpreters compiled to WebAssembly (WASI) using Zig.
 
 wasiglk compiles IF interpreters to WebAssembly with WASI, enabling them to run in browsers using [JSPI (JavaScript Promise Integration)](https://github.com/aspect-labs/aspect-engineering/blob/main/aspect-blog/2024-10-16-async-wasm.md) or in any WASI-compatible runtime.
 
-The interpreters use a Glk implementation (`src/wasi_glk.zig`) that communicates via JSON over stdin/stdout, compatible with the RemGlk protocol.
+The interpreters use a Glk implementation (in `packages/server/src/`) that communicates via JSON over stdin/stdout, compatible with the RemGlk protocol.
 
 ## Building
 
-Requires [Zig 0.15+](https://ziglang.org/).
+Requires [Zig 0.15+](https://ziglang.org/) and [Bun](https://bun.sh/).
 
 The Git interpreter additionally requires [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) for its precompiled `libsetjmp.a` (setjmp/longjmp support via WASM exception handling). Install via [mise](https://mise.jdx.dev/): `mise install wasi-sdk@27` or set `WASI_SDK_PATH` to your wasi-sdk installation.
 
 ```bash
 # Build all interpreters
-zig build -Doptimize=ReleaseSmall
+bun run build
 
-# Build specific interpreter
-zig build glulxe -Doptimize=ReleaseSmall
+# Or directly with zig
+zig build --build-file packages/server/build.zig -Doptimize=ReleaseSmall
 
-# Output in zig-out/bin/
-ls zig-out/bin/*.wasm
+# Output in packages/server/zig-out/bin/
+ls packages/server/zig-out/bin/*.wasm
+
+# Run tests
+bun run test
 ```
 
 ## Interpreters
@@ -81,18 +84,33 @@ await runWithJSPI(wasmBytes, {
 
 ```
 wasiglk/
-├── build.zig           # Zig build configuration
-├── src/
-│   ├── wasi_glk.zig    # Zig Glk implementation
-│   ├── glk.h           # Glk API header
-│   ├── gi_dispa.c      # Glk dispatch layer
-│   └── gi_blorb.c      # Blorb support
-├── glulxe/             # Glulxe interpreter (submodule)
-├── hugo/               # Hugo interpreter (submodule)
-├── git/                # Git interpreter (submodule)
-├── garglk/             # Garglk (contains Bocfel)
+├── run.ts                  # Build orchestration script
+├── package.json            # Root scripts (bun run build, test, etc.)
+├── packages/
+│   ├── client/             # TypeScript client library
+│   │   ├── src/            # Client source code
+│   │   └── package.json
+│   ├── server/             # Zig GLK implementation + interpreters
+│   │   ├── build.zig       # Zig build configuration
+│   │   └── src/
+│   │       ├── root.zig    # Module entry point
+│   │       ├── types.zig   # Core types and constants
+│   │       ├── state.zig   # Internal data structures
+│   │       ├── protocol.zig # RemGlk JSON protocol
+│   │       ├── window.zig  # Window functions
+│   │       ├── stream.zig  # Stream I/O functions
+│   │       ├── event.zig   # Event handling
+│   │       ├── ...         # Other Glk modules
+│   │       ├── glk.h       # Glk API header
+│   │       ├── gi_dispa.c  # Glk dispatch layer
+│   │       └── gi_blorb.c  # Blorb support
+│   ├── garglk/             # Garglk interpreters (submodule)
+│   ├── git/                # Git interpreter (submodule)
+│   ├── glulxe/             # Glulxe interpreter (submodule)
+│   ├── hugo/               # Hugo interpreter (submodule)
+│   └── zlib/               # zlib for Scare (submodule)
 └── examples/
-    └── jspi-browser/   # Browser JSPI example
+    └── jspi-browser/       # Browser JSPI example
 ```
 
 ## License
