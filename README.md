@@ -15,6 +15,8 @@ wasiglk is inspired by [emglken](https://github.com/curiousdannii/emglken), whic
 
 **Why JSPI?** Asyncify transforms the entire WASM binary to support suspending execution, which increases code size and has performance overhead. JSPI is a native browser feature that allows WASM to suspend without transformation, resulting in smaller binaries and better performance.
 
+**Current limitations:** JSPI is cutting-edge technology currently only available in Chrome 131+. Firefox is actively implementing support. Additionally, some C++ interpreters (Bocfel, TADS) are blocked on upstream wasi-sdk changes for exception handling. In the long term, JSPI should achieve wide browser support and become the preferred approach for async WASM.
+
 The interpreters use a Glk implementation (in `packages/server/src/`) that communicates via JSON over stdin/stdout, compatible with the RemGlk protocol.
 
 ## Getting Started
