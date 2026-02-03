@@ -6,7 +6,7 @@
 - **Use `./run`** for all common tasks - it auto-installs required tools (Zig, Bun, wasi-sdk):
   - `./run build` - Build all interpreters
   - `./run test` - Run tests
-  - `./run serve` - Start dev server (check if already running on the port first)
+  - `./run serve` or `./run demo` - Start dev server on port 3000 (check if already running first)
   - `./run typecheck` - Type check TypeScript
 
 ## Submodules
