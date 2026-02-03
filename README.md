@@ -17,24 +17,22 @@ wasiglk is inspired by [emglken](https://github.com/curiousdannii/emglken), whic
 
 The interpreters use a Glk implementation (in `packages/server/src/`) that communicates via JSON over stdin/stdout, compatible with the RemGlk protocol.
 
-## Building
+## Getting Started
 
-Requires [Zig 0.15+](https://ziglang.org/) and [Bun](https://bun.sh/).
-
-The Git interpreter additionally requires [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) for its precompiled `libsetjmp.a` (setjmp/longjmp support via WASM exception handling). Install via [mise](https://mise.jdx.dev/): `mise install wasi-sdk@27` or set `WASI_SDK_PATH` to your wasi-sdk installation.
+The `./run.ts` script auto-installs all required tools (Zig, Bun, wasi-sdk) on first run:
 
 ```bash
 # Build all interpreters
-bun run build
+./run.ts build
 
-# Or directly with zig
-zig build --build-file packages/server/build.zig -Doptimize=ReleaseSmall
+# Run tests
+./run.ts test
+
+# Start dev server
+./run.ts serve
 
 # Output in packages/server/zig-out/bin/
 ls packages/server/zig-out/bin/*.wasm
-
-# Run tests
-bun run test
 ```
 
 ## Interpreters
