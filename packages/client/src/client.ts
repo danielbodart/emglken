@@ -121,10 +121,13 @@ export class WasiGlkClient {
       interpreterData = await response.arrayBuffer();
     }
 
-    // Generate story ID for save isolation
-    const storyId = storyUrl
-      ? storyUrl.replace(/[^a-zA-Z0-9]/g, '_')
-      : `story_${hashBytes(storyData).toString(16)}`;
+    // Generate story ID for save isolation: gameName/versionHash
+    // This ensures different versions of the same game have separate saves
+    const gameName = storyUrl
+      ? storyUrl.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'unknown'
+      : 'story';
+    const versionHash = hashBytes(storyData).toString(16).padStart(8, '0');
+    const storyId = `${gameName}/${versionHash}`;
 
     return new WasiGlkClient(executableData, interpreterData, formatInfo, blorb, config.workerUrl, storyId, config.filesystem ?? 'auto');
   }
@@ -251,7 +254,7 @@ export class WasiGlkClient {
         type: 'init',
         interpreter: this.interpreterData,
         story: this.storyData,
-        args: [this.formatInfo.interpreter, 'story.ulx'],
+        args: [this.formatInfo.interpreter, '/sys/story.ulx'],
         metrics: config,
         storyId: this.storyId,
         filesystem: this.filesystem,

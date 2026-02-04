@@ -49,9 +49,14 @@ export class OpfsProvider implements StorageProvider {
       // Get OPFS root
       const opfsRoot = await navigator.storage.getDirectory();
 
-      // Create directory structure: /wasiglk/[storyId]/
-      const wasiglkDir = await opfsRoot.getDirectoryHandle('wasiglk', { create: true });
-      this.rootDir = await wasiglkDir.getDirectoryHandle(this.storyId, { create: true });
+      // Create directory structure: /wasiglk/[gameName]/[versionHash]/var/
+      // storyId is hierarchical like "advent/a3f2b1c8"
+      // Files go in /var/ to mirror WASI structure and avoid conflicts with /home/
+      let dir = await opfsRoot.getDirectoryHandle('wasiglk', { create: true });
+      for (const segment of this.storyId.split('/')) {
+        dir = await dir.getDirectoryHandle(segment, { create: true });
+      }
+      this.rootDir = await dir.getDirectoryHandle('var', { create: true });
 
       // Recursively load all files from OPFS
       await this.loadDirectory(this.rootDir, this.rootContents, '');

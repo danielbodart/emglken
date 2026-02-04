@@ -3,9 +3,12 @@
  *
  * Hybrid provider that uses OPFS for base storage (create_by_name)
  * and File System Access API dialogs for user-prompted files (create_by_prompt).
+ *
+ * Uses AsyncFSAFile for dialog files - sync operations on memory buffer
+ * with eventual consistency to external file.
  */
 
-import { SyncOPFSFile, type Inode } from '@bjorn3/browser_wasi_shim';
+import type { Inode } from '@bjorn3/browser_wasi_shim';
 import type {
   DialogCapableProvider,
   StorageConfig,
@@ -14,28 +17,34 @@ import type {
   DialogRequester,
 } from './types';
 import { OpfsProvider } from './opfs-provider';
-import { getExtension } from './filename-generator';
+import {
+  AsyncFSAFile,
+  createAsyncFSAFileForRead,
+  createAsyncFSAFileForWrite,
+} from './async-fsa-file';
 
 /**
  * Dialog-based storage provider.
  *
- * - create_by_name: Delegates to OPFS provider
- * - create_by_prompt: Shows file picker via main thread
+ * - create_by_name: Delegates to OPFS provider (for auto-saves in /var/)
+ * - create_by_prompt: Creates AsyncFSAFile wrapping the picker's file handle
  */
 export class DialogProvider implements DialogCapableProvider {
   private readonly opfsProvider: OpfsProvider;
   private dialogRequester: DialogRequester | null = null;
   private rootContents: Map<string, Inode> = new Map();
-  private externalFileCounter = 0;
-  /** Track external file handles for cleanup */
-  private readonly externalHandles: FileSystemSyncAccessHandle[] = [];
+  /** Contents for /home/ directory (user files from dialogs) */
+  private homeContents: Map<string, Inode> | null = null;
+  /** Track AsyncFSAFile instances for cleanup */
+  private readonly asyncFiles: Map<string, AsyncFSAFile> = new Map();
 
-  constructor(config: StorageConfig) {
+  constructor(private readonly config: StorageConfig) {
     this.opfsProvider = new OpfsProvider(config);
   }
 
   /**
    * Check if File System Access API is available.
+   * Note: This check is for main thread. Worker availability is handled differently.
    */
   static isAvailable(): boolean {
     return (
@@ -49,8 +58,15 @@ export class DialogProvider implements DialogCapableProvider {
     this.dialogRequester = requester;
   }
 
+  /**
+   * Set the /home/ directory contents map for user files from dialogs.
+   */
+  setHomeDirectory(homeContents: Map<string, Inode>): void {
+    this.homeContents = homeContents;
+  }
+
   async initialize(): Promise<Map<string, Inode>> {
-    // Initialize OPFS as base storage
+    // Initialize OPFS as base storage (for /var/ files)
     this.rootContents = await this.opfsProvider.initialize();
     console.log('[dialog] Initialized with OPFS base storage');
     return this.rootContents;
@@ -76,9 +92,13 @@ export class DialogProvider implements DialogCapableProvider {
         return { filename: null };
       }
 
-      // Mount the file handle
-      const filename = await this.mountExternalFile(result.handle, metadata.filetype);
-      console.log(`[dialog] Mounted external file: ${filename}`);
+      // Create AsyncFSAFile based on mode
+      const isRead = metadata.filemode === 'read';
+      const basename = await this.mountAsyncFSAFile(result.handle, result.filename, isRead);
+
+      // Return full WASI path so interpreter can find it
+      const filename = `/home/${basename}`;
+      console.log(`[dialog] Mounted AsyncFSAFile for ${isRead ? 'read' : 'write'}: ${filename}`);
       return { filename };
     } catch (err) {
       console.error('[dialog] File dialog failed:', err);
@@ -87,47 +107,38 @@ export class DialogProvider implements DialogCapableProvider {
   }
 
   /**
-   * Mount an external file handle into the WASI filesystem.
+   * Mount a FileSystemFileHandle as an AsyncFSAFile in /home/.
    */
-  private async mountExternalFile(
+  private async mountAsyncFSAFile(
     handle: FileSystemFileHandle,
-    filetype: string
+    filename: string,
+    isRead: boolean
   ): Promise<string> {
-    const ext = getExtension(filetype);
-    const filename = `__external_${this.externalFileCounter}.${ext}`;
-
-    try {
-      const syncHandle = await handle.createSyncAccessHandle();
-      this.externalHandles.push(syncHandle);
-      const externalFile = new SyncOPFSFile(syncHandle);
-      this.rootContents.set(filename, externalFile);
-      this.externalFileCounter++; // Increment only after success
-      return filename;
-    } catch (err) {
-      console.error('[dialog] Failed to create sync access handle:', err);
-      throw err;
+    if (!this.homeContents) {
+      throw new Error('/home/ directory not set - call setHomeDirectory first');
     }
+
+    // Clean up existing file with same name if any
+    this.asyncFiles.delete(filename);
+    this.homeContents.delete(filename);
+
+    // Create AsyncFSAFile - for read, data is loaded; for write, starts empty
+    const asyncFile = isRead
+      ? await createAsyncFSAFileForRead(handle)
+      : createAsyncFSAFileForWrite(handle);
+
+    this.asyncFiles.set(filename, asyncFile);
+    this.homeContents.set(filename, asyncFile);
+
+    return filename;
   }
 
   shouldPersist(path: string): boolean {
-    // External files are handled separately, delegate rest to OPFS
-    if (path.startsWith('__external_')) {
-      return false; // Already mounted directly
-    }
     return this.opfsProvider.shouldPersist(path);
   }
 
-  close(): void {
-    // Close external file handles
-    for (const handle of this.externalHandles) {
-      try {
-        handle.close();
-      } catch (err) {
-        console.warn('[dialog] Failed to close external handle:', err);
-      }
-    }
-    this.externalHandles.length = 0;
-
+  async close(): Promise<void> {
+    this.asyncFiles.clear();
     this.opfsProvider.close();
     console.log('[dialog] Closed');
   }

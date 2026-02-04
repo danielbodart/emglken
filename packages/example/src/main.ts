@@ -153,6 +153,7 @@ async function main(): Promise<void> {
       storyUrl: '/advent.ulx',
       interpreterUrl: '/glulxe.wasm',
       workerUrl: '/worker.js',
+      filesystem: 'dialog',
     });
 
     setStatus('Starting interpreter...', 'info');

@@ -245,15 +245,29 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
     // stderr - use console.debug for debug messages from the interpreter
     const stderr = ConsoleStdout.lineBuffered(line => console.debug('[interpreter]', line));
 
-    // Filesystem: story file (read-only) + any persisted files from storage
-    // Ensure saves directory exists (for compatibility)
-    if (!rootContents.has('saves')) {
-      rootContents.set('saves', new Directory(new Map()));
-    }
-    // Add story file (read-only, not persisted)
-    rootContents.set('story.ulx', new File(msg.story, { readonly: true }));
+    // Filesystem: Unix-like structure
+    // /sys/  - read-only system files (story)
+    // /var/  - auto-managed data (saves, transcripts) - from storage provider
+    // /home/ - user files from dialogs
+    const sysDir = new Directory(new Map([
+      ['story.ulx', new File(msg.story, { readonly: true })],
+    ]));
+    const homeContents = new Map<string, Inode>();
+    const homeDir = new Directory(homeContents);
 
-    const root = new PreopenDirectory('/', rootContents);
+    // Give dialog provider access to /home/ directory
+    if (isDialogProvider(storageProvider)) {
+      storageProvider.setHomeDirectory(homeContents);
+    }
+
+    // Root combines system dirs with storage provider contents (which go in /var/)
+    const rootMap = new Map<string, Inode>([
+      ['sys', sysDir],
+      ['var', new Directory(rootContents)],  // Storage provider files go here
+      ['home', homeDir],
+    ]);
+
+    const root = new PreopenDirectory('/', rootMap);
 
     // Create WASI and instantiate
     const wasiInstance = new WASI(msg.args, [], [stdin, stdout, stderr, root]);
@@ -296,32 +310,35 @@ function wrapWithJSPI(
   const imports = wasiInstance.wasiImport;
   const ROOT_FD = 3; // Root preopen directory is fd 3
 
-  // Async fd_read for stdin
+  // Async fd_read for stdin (other fds use sync path)
   const asyncFdRead = async (fd: number, iovsPtr: number, iovsLen: number, nreadPtr: number): Promise<number> => {
-    if (fd !== 0) {
-      return imports.fd_read(fd, iovsPtr, iovsLen, nreadPtr) as number;
-    }
+    // Stdin - async via JSPI
+    if (fd === 0) {
+      const memory = wasiInstance.inst.exports.memory;
+      const view = new DataView(memory.buffer);
+      const bytes = new Uint8Array(memory.buffer);
 
-    const memory = wasiInstance.inst.exports.memory;
-    const view = new DataView(memory.buffer);
-    const bytes = new Uint8Array(memory.buffer);
-
-    let nread = 0;
-    for (let i = 0; i < iovsLen; i++) {
-      const buf = view.getUint32(iovsPtr + i * 8, true);
-      const len = view.getUint32(iovsPtr + i * 8 + 4, true);
-      const { ret, data } = await stdin.fd_read_async(len);
-      if (ret !== wasi.ERRNO_SUCCESS) {
-        view.setUint32(nreadPtr, nread, true);
-        return ret;
+      let nread = 0;
+      for (let i = 0; i < iovsLen; i++) {
+        const buf = view.getUint32(iovsPtr + i * 8, true);
+        const len = view.getUint32(iovsPtr + i * 8 + 4, true);
+        const { ret, data } = await stdin.fd_read_async(len);
+        if (ret !== wasi.ERRNO_SUCCESS) {
+          view.setUint32(nreadPtr, nread, true);
+          return ret;
+        }
+        bytes.set(data, buf);
+        nread += data.length;
+        if (data.length < len) break;
       }
-      bytes.set(data, buf);
-      nread += data.length;
-      if (data.length < len) break;
+      view.setUint32(nreadPtr, nread, true);
+      return wasi.ERRNO_SUCCESS;
     }
-    view.setUint32(nreadPtr, nread, true);
-    return wasi.ERRNO_SUCCESS;
+
+    // Other fds - sync (AsyncFSAFile.read() is sync via inherited WasiFile)
+    return imports.fd_read(fd, iovsPtr, iovsLen, nreadPtr) as number;
   };
+
 
   // Async path_open for persistent file creation
   const asyncPathOpen = async (

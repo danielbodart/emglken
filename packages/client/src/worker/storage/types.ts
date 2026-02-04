@@ -88,6 +88,12 @@ export interface DialogCapableProvider extends StorageProvider {
    * Set the function to request file dialogs from the main thread.
    */
   setDialogRequester(requester: DialogRequester): void;
+
+  /**
+   * Set the /home/ directory contents map for user files from dialogs.
+   */
+  setHomeDirectory(homeContents: Map<string, Inode>): void;
+
 }
 
 /** Function type for requesting file dialogs from main thread */

@@ -27,3 +27,8 @@
 - **TypeScript/JavaScript**: Use Bun in preference over Node
   - Always try Bun first
   - Fall back to Node only if something doesn't work in Bun
+
+## Browser Automation
+
+- **Never add wait/sleep calls** when using Chrome or Playwright automation tools
+- These introduce flakiness and slow down testing unnecessarily
