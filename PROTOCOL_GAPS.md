@@ -240,13 +240,17 @@ Currently: No external event handling.
 
 ---
 
-### [ ] 19. Line Input Terminator Not Handled
+### [x] 19. Line Input Terminator Handled (FIXED)
 
-**Location:** `packages/server/src/event.zig:61-93`
+**Location:** `packages/server/src/event.zig`, `packages/server/src/protocol.zig`, `packages/server/src/types.zig`
 
 Display can send: `{type: "line", ..., terminator: "escape"}`
 
-Currently: `terminator` field is ignored. Should report which special key ended input.
+**Fixed:**
+1. Added `terminator` field to InputEvent structs
+2. Added function key constants (Func1-Func12) to keycode struct
+3. Added `terminatorToKeycode()` helper to convert terminator strings
+4. Line input now returns the terminator keycode in event.val2
 
 ---
 

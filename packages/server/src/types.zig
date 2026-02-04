@@ -134,6 +134,18 @@ pub const keycode = struct {
     pub const PageDown: glui32 = 0xfffffff5;
     pub const Home: glui32 = 0xfffffff4;
     pub const End: glui32 = 0xfffffff3;
+    pub const Func1: glui32 = 0xffffffef;
+    pub const Func2: glui32 = 0xffffffee;
+    pub const Func3: glui32 = 0xffffffed;
+    pub const Func4: glui32 = 0xffffffec;
+    pub const Func5: glui32 = 0xffffffeb;
+    pub const Func6: glui32 = 0xffffffea;
+    pub const Func7: glui32 = 0xffffffe9;
+    pub const Func8: glui32 = 0xffffffe8;
+    pub const Func9: glui32 = 0xffffffe7;
+    pub const Func10: glui32 = 0xffffffe6;
+    pub const Func11: glui32 = 0xffffffe5;
+    pub const Func12: glui32 = 0xffffffe4;
 };
 
 // ============== DateTime Structures ==============

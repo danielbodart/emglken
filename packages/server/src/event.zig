@@ -14,6 +14,27 @@ const keycode = types.keycode;
 const WindowData = state.WindowData;
 const allocator = state.allocator;
 
+// Convert terminator string to keycode (per GlkOte spec)
+fn terminatorToKeycode(terminator: ?[]const u8) glui32 {
+    const term = terminator orelse return 0;
+
+    if (std.mem.eql(u8, term, "escape")) return keycode.Escape;
+    if (std.mem.eql(u8, term, "func1")) return keycode.Func1;
+    if (std.mem.eql(u8, term, "func2")) return keycode.Func2;
+    if (std.mem.eql(u8, term, "func3")) return keycode.Func3;
+    if (std.mem.eql(u8, term, "func4")) return keycode.Func4;
+    if (std.mem.eql(u8, term, "func5")) return keycode.Func5;
+    if (std.mem.eql(u8, term, "func6")) return keycode.Func6;
+    if (std.mem.eql(u8, term, "func7")) return keycode.Func7;
+    if (std.mem.eql(u8, term, "func8")) return keycode.Func8;
+    if (std.mem.eql(u8, term, "func9")) return keycode.Func9;
+    if (std.mem.eql(u8, term, "func10")) return keycode.Func10;
+    if (std.mem.eql(u8, term, "func11")) return keycode.Func11;
+    if (std.mem.eql(u8, term, "func12")) return keycode.Func12;
+
+    return 0;
+}
+
 // Helper to extract initial text from line buffer
 fn getInitialText(w: *WindowData) ?[]const u8 {
     if (w.line_initlen == 0) return null;
@@ -94,6 +115,7 @@ export fn glk_select(event: ?*event_t) callconv(.c) void {
     defer {
         allocator.free(input_event.type);
         if (input_event.value) |v| allocator.free(v);
+        if (input_event.terminator) |t| allocator.free(t);
     }
 
     // Handle timer events
@@ -209,6 +231,7 @@ export fn glk_select(event: ?*event_t) callconv(.c) void {
             event.?.type = evtype.LineInput;
             event.?.win = @ptrCast(w);
             event.?.val1 = copy_len;
+            event.?.val2 = terminatorToKeycode(input_event.terminator);
 
             // Unregister the buffer so Glulxe copies data back to VM memory
             if (dispatch.retained_unregister_fn) |unregister_fn| {

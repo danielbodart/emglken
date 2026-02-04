@@ -45,6 +45,8 @@ pub const InputEventRaw = struct {
     // Mouse event coordinates
     x: ?i32 = null,
     y: ?i32 = null,
+    // Line input terminator (e.g., "escape", "func1")
+    terminator: ?[]const u8 = null,
 };
 
 // Processed input event with typed value fields
@@ -58,6 +60,8 @@ pub const InputEvent = struct {
     // Mouse event coordinates
     x: ?i32 = null,
     y: ?i32 = null,
+    // Line input terminator
+    terminator: ?[]const u8 = null,
 };
 
 pub const Metrics = struct {
@@ -187,6 +191,7 @@ pub fn parseInputEvent(json_str: []const u8) ?InputEvent {
         .metrics = parsed.value.metrics,
         .x = parsed.value.x,
         .y = parsed.value.y,
+        .terminator = if (parsed.value.terminator) |t| allocator.dupe(u8, t) catch null else null,
     };
 }
 
