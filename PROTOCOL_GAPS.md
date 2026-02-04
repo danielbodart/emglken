@@ -332,9 +332,9 @@ Currently: Not implemented.
 
 ---
 
-### [ ] 25c. Style Output Not Implemented
+### [x] 25c. Style Output Now Implemented (FIXED)
 
-**Location:** `packages/server/src/stream.zig:470-477`
+**Location:** `packages/server/src/stream.zig:470-477`, `packages/server/src/protocol.zig`, `packages/server/src/state.zig`
 
 **Spec:** Text spans can include `style` to specify formatting:
 ```json
@@ -343,12 +343,12 @@ Currently: Not implemented.
 
 Valid styles: `normal`, `emphasized`, `preformatted`, `header`, `subheader`, `alert`, `note`, `blockquote`, `input`, `user1`, `user2`
 
-**Current:** `glk_set_style()` and `glk_set_style_stream()` are no-ops. All text is output without style information.
-
-**Implementation needed:**
-1. Add `current_style` field to stream/window state
-2. Modify text buffer flushing to track style spans
-3. Output text with `style` field in content spans
+**Fixed:**
+1. Added `current_style` field to global state
+2. `glk_set_style()` flushes text buffer and updates current style
+3. `glk_set_style_stream()` delegates to `glk_set_style()` for current stream
+4. `sendBufferTextUpdate()` now outputs text with `style` field in content spans
+5. Added `styleToString()` helper to convert Glk style constants to GlkOte style names
 
 ---
 

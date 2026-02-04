@@ -118,6 +118,9 @@ pub var text_buffer: [8192]u8 = undefined;
 pub var text_buffer_len: usize = 0;
 pub var text_buffer_win: ?*WindowData = null;
 
+// Current text style (Glk style constants: 0=Normal, 1=Emphasized, 2=Preformatted, etc.)
+pub var current_style: glui32 = 0; // style_Normal
+
 // Initialization flag and client metrics
 pub var glk_initialized: bool = false;
 pub var client_metrics: struct {

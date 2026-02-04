@@ -468,12 +468,20 @@ export fn glk_put_buffer_stream(str_opaque: strid_t, buf: ?[*]const u8, len: glu
 }
 
 export fn glk_set_style(styl: glui32) callconv(.c) void {
-    _ = styl;
+    // Flush current buffer before changing style (so previous text keeps its style)
+    if (state.current_style != styl) {
+        protocol.flushTextBuffer();
+        state.current_style = styl;
+    }
 }
 
-export fn glk_set_style_stream(str: strid_t, styl: glui32) callconv(.c) void {
-    _ = str;
-    _ = styl;
+export fn glk_set_style_stream(str_opaque: strid_t, styl: glui32) callconv(.c) void {
+    // For now, only handle setting style on the current stream
+    // A full implementation would track style per-stream
+    const str: ?*StreamData = @ptrCast(@alignCast(str_opaque));
+    if (str != null and str == state.current_stream) {
+        glk_set_style(styl);
+    }
 }
 
 // ============== Input Functions ==============

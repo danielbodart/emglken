@@ -502,6 +502,24 @@ fn alignmentToString(alignment: glsi32) []const u8 {
     };
 }
 
+// Glk style number to GlkOte style name mapping
+fn styleToString(style: glui32) []const u8 {
+    return switch (style) {
+        0 => "normal",
+        1 => "emphasized",
+        2 => "preformatted",
+        3 => "header",
+        4 => "subheader",
+        5 => "alert",
+        6 => "note",
+        7 => "blockquote",
+        8 => "input",
+        9 => "user1",
+        10 => "user2",
+        else => "normal",
+    };
+}
+
 // Send an image content update for buffer windows using paragraph format per GlkOte spec
 pub fn sendImageUpdate(win_id: u32, image: glui32, alignment: glsi32, img_width: glui32, img_height: glui32) void {
     // Flush any pending updates first
@@ -779,8 +797,13 @@ fn flushGridWindow(win: *state.WindowData) void {
 }
 
 // Send buffer window text with proper paragraph structure per GlkOte spec
-// Format: {"id": N, "text": [{"append": true, "content": ["escaped text"]}]}
+// Format: {"id": N, "text": [{"append": true, "content": [{"style": "normal", "text": "escaped text"}]}]}
 pub fn sendBufferTextUpdate(win_id: u32, text: []const u8, clear: bool) void {
+    sendStyledBufferTextUpdate(win_id, text, clear, state.current_style);
+}
+
+// Send buffer window text with explicit style
+fn sendStyledBufferTextUpdate(win_id: u32, text: []const u8, clear: bool, style: glui32) void {
     // Flush any other pending updates first
     if (pending_content_len > 0 or pending_windows_len > 0 or pending_input_len > 0) {
         sendUpdate();
@@ -790,15 +813,17 @@ pub fn sendBufferTextUpdate(win_id: u32, text: []const u8, clear: bool) void {
     var escaped_buf: [16384]u8 = undefined;
     const escaped_text = jsonEscapeString(text, &escaped_buf);
 
+    const style_str = styleToString(style);
+
     var buf: [32768]u8 = undefined;
     const json = if (clear)
         std.fmt.bufPrint(&buf,
-            \\{{"type":"update","gen":{d},"content":[{{"id":{d},"clear":true,"text":[{{"append":true,"content":["{s}"]}}]}}]}}
-        , .{ generation, win_id, escaped_text }) catch return
+            \\{{"type":"update","gen":{d},"content":[{{"id":{d},"clear":true,"text":[{{"append":true,"content":[{{"style":"{s}","text":"{s}"}}]}}]}}]}}
+        , .{ generation, win_id, style_str, escaped_text }) catch return
     else
         std.fmt.bufPrint(&buf,
-            \\{{"type":"update","gen":{d},"content":[{{"id":{d},"text":[{{"append":true,"content":["{s}"]}}]}}]}}
-        , .{ generation, win_id, escaped_text }) catch return;
+            \\{{"type":"update","gen":{d},"content":[{{"id":{d},"text":[{{"append":true,"content":[{{"style":"{s}","text":"{s}"}}]}}]}}]}}
+        , .{ generation, win_id, style_str, escaped_text }) catch return;
 
     writeStdout(json);
     writeStdout("\n");

@@ -53,6 +53,29 @@ describe('parseRemGlkUpdate', () => {
     }
   });
 
+  test('parses content with styled text spans (paragraph format)', () => {
+    // GlkOte spec: styled text spans have style and text fields
+    const update: RemGlkUpdate = {
+      type: 'update',
+      gen: 3,
+      content: [
+        {
+          id: 1,
+          text: [{ append: true, content: [{ style: 'emphasized', text: 'Important text' }] }],
+        },
+      ],
+    };
+
+    const results = parseRemGlkUpdate(update, noopResolver);
+
+    const contentUpdate = results.find((u) => u.type === 'content');
+    expect(contentUpdate?.type).toBe('content');
+    if (contentUpdate?.type === 'content') {
+      expect(contentUpdate.content[0].text).toBe('Important text');
+      expect(contentUpdate.content[0].style).toBe('emphasized');
+    }
+  });
+
   test('parses content with image special span (paragraph format)', () => {
     const imageUrlResolver = (num: number) =>
       num === 5 ? 'blob:test-image-5' : undefined;
