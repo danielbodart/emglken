@@ -19,10 +19,10 @@ The combination of Zig, WASI, JSPI, and wasm-opt produces dramatically smaller b
 
 | Interpreter | emglken | wasiglk | Reduction |
 |-------------|---------|---------|-----------|
-| glulxe.wasm | 1.68 MB | 198 KB | **88% smaller** |
-| git.wasm | 1.68 MB | 222 KB | **87% smaller** |
-| hugo.wasm | 1.12 MB | 177 KB | **84% smaller** |
-| scare.wasm | 1.82 MB | 423 KB | **77% smaller** |
+| glulxe.wasm | 1.68 MB | 239 KB | **86% smaller** |
+| git.wasm | 1.68 MB | 248 KB | **85% smaller** |
+| hugo.wasm | 1.12 MB | 206 KB | **82% smaller** |
+| scare.wasm | 1.82 MB | 446 KB | **76% smaller** |
 
 **Why JSPI?** JSPI (JavaScript Promise Integration) is a native browser feature that allows WASM to suspend and resume execution without code transformation, resulting in smaller binaries and better performance.
 
