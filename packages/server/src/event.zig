@@ -155,6 +155,27 @@ export fn glk_select(event: ?*event_t) callconv(.c) void {
         return;
     }
 
+    // Handle redraw events (graphics window needs redrawing)
+    if (std.mem.eql(u8, input_event.type, "redraw")) {
+        event.?.type = evtype.Redraw;
+        // If window ID provided, find and return that window; otherwise use root
+        if (input_event.window) |win_id| {
+            var target_win = state.window_list;
+            while (target_win) |tw| : (target_win = tw.next) {
+                if (tw.id == win_id) {
+                    event.?.win = @ptrCast(tw);
+                    event.?.val1 = 0;
+                    event.?.val2 = 0;
+                    return;
+                }
+            }
+        }
+        event.?.win = @ptrCast(state.root_window);
+        event.?.val1 = 0;
+        event.?.val2 = 0;
+        return;
+    }
+
     // Handle char/line input events - need a window for these
     if (win == null) return;
     const w = win.?;

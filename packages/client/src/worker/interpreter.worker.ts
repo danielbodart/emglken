@@ -80,6 +80,15 @@ self.onmessage = async (e: MessageEvent<MainToWorkerMessage>) => {
       window: msg.windowId,
       value: msg.linkValue,
     }));
+  } else if (msg.type === 'redraw' && inputResolve) {
+    // Send redraw request to interrupt current input request
+    const resolve = inputResolve;
+    inputResolve = null;
+    resolve(JSON.stringify({
+      type: 'redraw',
+      gen: generation,
+      window: msg.windowId,
+    }));
   } else if (msg.type === 'stop') {
     self.close();
   }

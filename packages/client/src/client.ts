@@ -184,6 +184,18 @@ export class WasiGlkClient {
     } satisfies MainToWorkerMessage);
   }
 
+  /**
+   * Send a redraw request to the interpreter.
+   * This notifies the game that a graphics window needs to be redrawn.
+   * @param windowId - Optional window ID. If omitted, all graphics windows need redrawing.
+   */
+  sendRedraw(windowId?: number): void {
+    this.worker?.postMessage({
+      type: 'redraw',
+      windowId,
+    } satisfies MainToWorkerMessage);
+  }
+
   stop(): void {
     this.running = false;
     this.blorb?.dispose();

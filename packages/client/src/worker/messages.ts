@@ -19,6 +19,7 @@ export type MainToWorkerMessage =
   | { type: 'arrange'; metrics: WorkerMetrics }
   | { type: 'mouse'; windowId: number; x: number; y: number }
   | { type: 'hyperlink'; windowId: number; linkValue: number }
+  | { type: 'redraw'; windowId?: number }
   | { type: 'stop' };
 
 /** Messages from worker to main thread */

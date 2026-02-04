@@ -195,11 +195,14 @@ These are input events the display can send that wasiglk doesn't handle.
 
 ---
 
-### [ ] 14. Redraw Events Not Handled
+### [x] 14. Redraw Events Handled (FIXED)
 
 Display can send: `{type: "redraw", gen: N, window?: ID}`
 
-Currently: No handling for graphics redraw requests.
+**Fixed:**
+1. `glk_select()` handles "redraw" events and returns `evtype_Redraw`
+2. If window ID is provided, that window is returned; otherwise root window
+3. Client has `sendRedraw(windowId?)` method to trigger redraw requests
 
 ---
 
