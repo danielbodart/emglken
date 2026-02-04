@@ -1,5 +1,5 @@
 #!/usr/bin/env ./bootstrap.sh
-import {$, spawn} from "bun";
+import {$, spawn, Glob} from "bun";
 
 process.env.FORCE_COLOR = "1";
 
@@ -9,6 +9,7 @@ export async function clean() {
 
 export async function build(...args: string[]) {
     await buildZig(...args);
+    await optimize();
 }
 
 // Build Zig interpreters (server package)
@@ -16,6 +17,37 @@ export async function buildZig(...args: string[]) {
     // Default to ReleaseSmall for WASM size optimization
     const optimize = args.includes('-Doptimize=') ? [] : ['-Doptimize=ReleaseSmall'];
     await $`zig build --build-file packages/server/build.zig --prefix packages/server/zig-out ${optimize} ${args}`;
+}
+
+// Optimize WASM binaries with Binaryen wasm-opt
+export async function optimize() {
+    const glob = new Glob("packages/server/zig-out/bin/*.wasm");
+    const wasmFiles = Array.from(glob.scanSync("."));
+
+    if (wasmFiles.length === 0) {
+        console.log("No WASM files to optimize");
+        return;
+    }
+
+    console.log(`Optimizing ${wasmFiles.length} WASM files with wasm-opt...`);
+    const wasmOpt = "./node_modules/.bin/wasm-opt";
+
+    for (const file of wasmFiles) {
+        const before = Bun.file(file).size;
+        await $`${wasmOpt} -Oz \
+            --enable-bulk-memory \
+            --enable-exception-handling \
+            --enable-nontrapping-float-to-int \
+            --enable-sign-ext \
+            --enable-mutable-globals \
+            --enable-reference-types \
+            --enable-typed-function-references \
+            ${file} -o ${file}`.quiet();
+        const after = Bun.file(file).size;
+        const saved = before - after;
+        const percent = Math.round(saved * 100 / before);
+        console.log(`  ${file.split('/').pop()}: ${before} -> ${after} (${percent}% smaller)`);
+    }
 }
 
 // Build TypeScript client library

@@ -13,6 +13,17 @@ wasiglk is inspired by [emglken](https://github.com/curiousdannii/emglken), whic
 | **Async handling** | Asyncify (code transformation) | [JSPI](https://v8.dev/blog/jspi) (native browser feature) |
 | **Glk implementation** | RemGlk-rs (Rust) | Custom Zig implementation |
 
+### WASM Binary Size Comparison
+
+The combination of Zig, JSPI (no Asyncify overhead), and wasm-opt produces dramatically smaller binaries:
+
+| Interpreter | emglken | wasiglk | Reduction |
+|-------------|---------|---------|-----------|
+| glulxe.wasm | 1.68 MB | 198 KB | **88% smaller** |
+| git.wasm | 1.68 MB | 222 KB | **87% smaller** |
+| hugo.wasm | 1.12 MB | 177 KB | **84% smaller** |
+| scare.wasm | 1.82 MB | 423 KB | **77% smaller** |
+
 **Why JSPI?** Asyncify transforms the entire WASM binary to support suspending execution, which increases code size and has performance overhead. JSPI is a native browser feature that allows WASM to suspend without transformation, resulting in smaller binaries and better performance.
 
 **Current limitations:** JSPI is cutting-edge technology currently only available in Chrome 131+. Firefox is actively implementing support. Additionally, some C++ interpreters (Bocfel, TADS) are blocked on upstream wasi-sdk changes for exception handling. In the long term, JSPI should achieve wide browser support and become the preferred approach for async WASM.

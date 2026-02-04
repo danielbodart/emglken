@@ -20,6 +20,7 @@
   "type": "module",
   "devDependencies": {
     "@playwright/test": "^1.58.1",
+    "binaryen": "^125.0.0",
     "playwright": "^1.58.1"
   },
   "scripts": {
