@@ -348,6 +348,11 @@ pub fn sendUpdate() void {
 
         buf[offset] = ']';
         offset += 1;
+    } else {
+        // No input requests - send disable: true to indicate input not expected
+        const disable_true = ",\"disable\":true";
+        @memcpy(buf[offset..][0..disable_true.len], disable_true);
+        offset += disable_true.len;
     }
 
     // Add timer only if explicitly set

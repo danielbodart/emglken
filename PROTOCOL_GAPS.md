@@ -282,11 +282,11 @@ Fields that should be sent from interpreter to display but aren't.
 
 ---
 
-### [ ] 22. Disable Field Not Sent
+### [x] 22. Disable Field Now Sent (FIXED)
 
 **Spec:** Update can include `disable: true` to disable all input.
 
-Currently: Not implemented.
+**Fixed:** Updates without input requests now include `disable: true` to indicate the game is not expecting input.
 
 ---
 
