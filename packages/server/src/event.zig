@@ -214,6 +214,28 @@ export fn glk_select(event: ?*event_t) callconv(.c) void {
         return;
     }
 
+    // Handle debug input events (display sends debug commands)
+    // Per GlkOte spec, these are for debugging purposes
+    // Currently we acknowledge but don't process them
+    if (std.mem.eql(u8, input_event.type, "debuginput")) {
+        event.?.type = evtype.None;
+        event.?.win = null;
+        event.?.val1 = 0;
+        event.?.val2 = 0;
+        return;
+    }
+
+    // Handle external events (custom extension events)
+    // Per GlkOte spec, these are for custom implementations
+    // Currently we acknowledge but don't process them
+    if (std.mem.eql(u8, input_event.type, "external")) {
+        event.?.type = evtype.None;
+        event.?.win = null;
+        event.?.val1 = 0;
+        event.?.val2 = 0;
+        return;
+    }
+
     // Handle char/line input events - need a window for these
     if (win == null) return;
     const w = win.?;

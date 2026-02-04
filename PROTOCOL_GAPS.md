@@ -224,19 +224,19 @@ Currently: File dialogs not implemented.
 
 ---
 
-### [ ] 17. Debug Input Events Not Handled
+### [x] 17. Debug Input Events Handled (FIXED)
 
 Display can send: `{type: "debuginput", gen: N, value: "command"}`
 
-Currently: No debug command handling.
+**Fixed:** Events are now parsed and acknowledged (returns evtype.None). Debug commands could be implemented in the future but currently are no-ops.
 
 ---
 
-### [ ] 18. External Events Not Handled
+### [x] 18. External Events Handled (FIXED)
 
 Display can send: `{type: "external", gen: N, value: ANY}`
 
-Currently: No external event handling.
+**Fixed:** Events are now parsed and acknowledged (returns evtype.None). External events are for custom extensions and are safely ignored.
 
 ---
 
@@ -391,8 +391,9 @@ Fields that should be included in input requests but aren't.
 12. ~~Metrics completeness (#9)~~ ✅ FIXED - all GlkOte spec metrics fields added
 13. Window positions (#8)
 14. ~~Remaining input fields (#26-30)~~ ✅ FIXED - terminators (#26), hyperlink (#27), mouse (#28), xpos/ypos (#29), initial (#30) all implemented
-15. Debug features (#17, #25)
-16. External events (#18)
+15. ~~Debug input events (#17)~~ ✅ FIXED - acknowledged with evtype.None
+16. ~~External events (#18)~~ ✅ FIXED - acknowledged with evtype.None
+17. Debug output (#25) - optional feature
 17. ~~Partial input (#20)~~ ✅ FIXED - partial text captured from interrupted input
 
 ---
