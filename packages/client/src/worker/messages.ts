@@ -3,6 +3,9 @@
  */
 
 import type { RemGlkUpdate } from '../protocol';
+import type { FilesystemMode } from './storage';
+
+export type { FilesystemMode };
 
 /** Metrics passed to the worker */
 export interface WorkerMetrics {
@@ -34,7 +37,7 @@ export interface WorkerMetrics {
 
 /** Messages from main thread to worker */
 export type MainToWorkerMessage =
-  | { type: 'init'; interpreter: ArrayBuffer; story: Uint8Array; args: string[]; metrics: WorkerMetrics; storyId: string }
+  | { type: 'init'; interpreter: ArrayBuffer; story: Uint8Array; args: string[]; metrics: WorkerMetrics; storyId: string; filesystem: FilesystemMode }
   | { type: 'input'; value: string }
   | { type: 'arrange'; metrics: WorkerMetrics }
   | { type: 'mouse'; windowId: number; x: number; y: number }

@@ -40,4 +40,5 @@ export { SvgRenderer } from './renderers/svg';
 export type {
   MainToWorkerMessage,
   WorkerToMainMessage,
+  FilesystemMode,
 } from './worker/messages';

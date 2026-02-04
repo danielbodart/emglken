@@ -2,7 +2,7 @@
  * Interpreter Worker
  *
  * Runs the WASM interpreter in a Web Worker using browser_wasi_shim.
- * Uses JSPI for async stdin and OPFS file creation.
+ * Uses JSPI for async stdin and pluggable file storage.
  */
 
 import {
@@ -12,12 +12,17 @@ import {
   PreopenDirectory,
   ConsoleStdout,
   WASIProcExit,
-  SyncOPFSFile,
   wasi,
   type Inode,
 } from '@bjorn3/browser_wasi_shim';
 import { AsyncStdinFd } from './stdin';
-import { OpfsStorage } from './opfs-storage';
+import {
+  createStorageProvider,
+  isDialogProvider,
+  type StorageProvider,
+  type FileType,
+  type FileMode,
+} from './storage';
 import type { MainToWorkerMessage, WorkerToMainMessage } from './messages';
 import type { InputEvent, RemGlkUpdate } from '../protocol';
 
@@ -25,20 +30,13 @@ let inputResolve: ((value: string) => void) | null = null;
 let generation = 0;
 let currentInputRequest: { windowId: number; type: 'line' | 'char' } | null = null;
 let timerIntervalId: ReturnType<typeof setInterval> | null = null;
-// File dialog state
-let pendingFileDialog: { filemode: 'read' | 'write' | 'readwrite' | 'writeappend'; filetype: string } | null = null;
-let fileDialogResolve: ((result: { filename: string | null; handle?: FileSystemFileHandle }) => void) | null = null;
-let externalFileCounter = 0;
 
-/** Get file extension for a GlkOte filetype */
-function getExtension(filetype: string): string {
-  switch (filetype) {
-    case 'save': return 'glksave';
-    case 'transcript': return 'txt';
-    case 'command': return 'txt';
-    default: return 'glkdata';
-  }
-}
+// File dialog state (for dialog mode)
+let pendingFileDialog: { filemode: FileMode; filetype: FileType } | null = null;
+let fileDialogResolve: ((result: { filename: string | null; handle?: FileSystemFileHandle }) => void) | null = null;
+
+// Storage provider (set during init)
+let storageProvider: StorageProvider | null = null;
 
 /**
  * Build metrics object for RemGLK protocol from WorkerMetrics.
@@ -149,6 +147,31 @@ self.onmessage = async (e: MessageEvent<MainToWorkerMessage>) => {
 
 async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Promise<void> {
   try {
+    // Initialize storage provider based on filesystem mode
+    storageProvider = await createStorageProvider({
+      mode: msg.filesystem,
+      storyId: msg.storyId,
+    });
+
+    // Set up dialog requester for dialog-capable providers
+    if (isDialogProvider(storageProvider)) {
+      storageProvider.setDialogRequester(async (filemode, filetype) => {
+        // Request file dialog from main thread
+        post({
+          type: 'fileDialogRequest',
+          filemode,
+          filetype,
+        });
+        // Wait for result
+        return new Promise(resolve => {
+          fileDialogResolve = resolve;
+        });
+      });
+    }
+
+    // Initialize storage and get existing files
+    const rootContents = await storageProvider.initialize();
+
     // stdin: async for JSPI
     const stdin = new AsyncStdinFd(async () => {
       if (generation === 0) {
@@ -167,46 +190,18 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
         const dialogInfo = pendingFileDialog;
         pendingFileDialog = null;
 
-        // Wait for file dialog result from main thread
-        const result = await new Promise<{ filename: string | null; handle?: FileSystemFileHandle }>(
-          resolve => { fileDialogResolve = resolve; }
-        );
+        // Let the storage provider handle the prompt
+        const result = await storageProvider!.handlePrompt({
+          filetype: dialogInfo.filetype,
+          filemode: dialogInfo.filemode,
+        });
 
-        // User cancelled or no handle
-        if (result.filename === null || !result.handle) {
-          return JSON.stringify({
-            type: 'specialresponse',
-            gen: generation,
-            response: 'fileref_prompt',
-            value: null,
-          });
-        }
-
-        // Mount the FileSystemFileHandle directly via SyncAccessHandle
-        const filePath = `/__external_${externalFileCounter++}.${getExtension(dialogInfo.filetype)}`;
-        try {
-          // Get synchronous access to the file (works for both read and write)
-          const syncHandle = await result.handle.createSyncAccessHandle();
-          // Wrap it using browser_wasi_shim's SyncOPFSFile (works with any sync handle)
-          const externalFile = new SyncOPFSFile(syncHandle);
-          addFileToTree(root.dir, filePath, externalFile);
-          console.log(`[external] Mounted external file at ${filePath}`);
-          return JSON.stringify({
-            type: 'specialresponse',
-            gen: generation,
-            response: 'fileref_prompt',
-            value: filePath,
-          });
-        } catch (e) {
-          console.error('[external] Failed to get sync access to file:', e);
-          // Treat as cancelled
-          return JSON.stringify({
-            type: 'specialresponse',
-            gen: generation,
-            response: 'fileref_prompt',
-            value: null,
-          });
-        }
+        return JSON.stringify({
+          type: 'specialresponse',
+          gen: generation,
+          response: 'fileref_prompt',
+          value: result.filename,
+        });
       }
 
       return new Promise<string>(resolve => { inputResolve = resolve; });
@@ -233,18 +228,13 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
           handleTimerUpdate(update.timer);
         }
         // Handle special input (file dialogs)
+        // Just set the pending dialog - the stdin handler will process it
+        // and the storage provider will handle requesting dialogs if needed
         if (update.specialinput) {
-          const filemode = update.specialinput.filemode;
           pendingFileDialog = {
-            filemode,
-            filetype: update.specialinput.filetype,
+            filemode: update.specialinput.filemode as FileMode,
+            filetype: update.specialinput.filetype as FileType,
           };
-          // Request file dialog from main thread
-          post({
-            type: 'fileDialogRequest',
-            filemode,
-            filetype: update.specialinput.filetype,
-          });
         }
         post({ type: 'update', data: update });
       } catch {
@@ -255,23 +245,7 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
     // stderr - use console.debug for debug messages from the interpreter
     const stderr = ConsoleStdout.lineBuffered(line => console.debug('[interpreter]', line));
 
-    // Initialize OPFS for persistent storage (if available)
-    let opfsStorage: OpfsStorage | null = null;
-    let rootContents = new Map<string, Inode>();
-
-    if (OpfsStorage.isAvailable()) {
-      try {
-        const result = await OpfsStorage.create({ storyId: msg.storyId });
-        opfsStorage = result.manager;
-        rootContents = result.rootContents;
-      } catch (err) {
-        console.warn('[worker] OPFS initialization failed, files will not persist:', err);
-      }
-    } else {
-      console.warn('[worker] OPFS not available, files will not persist');
-    }
-
-    // Filesystem: story file (read-only) + any persisted files from OPFS
+    // Filesystem: story file (read-only) + any persisted files from storage
     // Ensure saves directory exists (for compatibility)
     if (!rootContents.has('saves')) {
       rootContents.set('saves', new Directory(new Map()));
@@ -284,7 +258,7 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
     // Create WASI and instantiate
     const wasiInstance = new WASI(msg.args, [], [stdin, stdout, stderr, root]);
     const module = await WebAssembly.compile(msg.interpreter);
-    const imports = wrapWithJSPI(wasiInstance, stdin, opfsStorage, root);
+    const imports = wrapWithJSPI(wasiInstance, stdin, storageProvider, root);
     const instance = await WebAssembly.instantiate(module, imports);
     wasiInstance.inst = instance as { exports: { memory: WebAssembly.Memory } };
 
@@ -305,8 +279,8 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
         throw err;
       }
     } finally {
-      // Clean up OPFS handles to release file locks
-      opfsStorage?.close();
+      // Clean up storage handles to release file locks
+      storageProvider?.close();
     }
   } catch (err) {
     post({ type: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -316,7 +290,7 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
 function wrapWithJSPI(
   wasiInstance: WASI,
   stdin: AsyncStdinFd,
-  opfsStorage: OpfsStorage | null,
+  provider: StorageProvider,
   root: PreopenDirectory,
 ): WebAssembly.Imports {
   const imports = wasiInstance.wasiImport;
@@ -349,7 +323,7 @@ function wrapWithJSPI(
     return wasi.ERRNO_SUCCESS;
   };
 
-  // Async path_open for OPFS file creation
+  // Async path_open for persistent file creation
   const asyncPathOpen = async (
     fd: number,
     dirflags: number,
@@ -370,10 +344,9 @@ function wrapWithJSPI(
 
     // Check if creating a file that should be persisted
     const shouldPersist =
-      opfsStorage !== null &&
       fd === ROOT_FD &&
       (oflags & wasi.OFLAGS_CREAT) !== 0 &&
-      OpfsStorage.shouldPersist(path);
+      provider.shouldPersist(path);
 
     if (shouldPersist) {
       // Check if file already exists in the directory tree
@@ -381,13 +354,10 @@ function wrapWithJSPI(
 
       if (!existingFile) {
         try {
-          // Async OPFS file creation - WASM suspends here
-          const syncHandle = await opfsStorage.createFile(path);
-          const opfsFile = new SyncOPFSFile(syncHandle);
-          addFileToTree(root.dir, path, opfsFile);
-          console.log(`[opfs] Created persistent file: ${path}`);
+          // Async file creation - WASM suspends here
+          await provider.createFile(path);
         } catch (err) {
-          console.error(`[opfs] Failed to create file ${path}:`, err);
+          console.error(`[storage] Failed to create file ${path}:`, err);
           // Fall through to normal path_open which will create in-memory file
         }
       }
@@ -430,33 +400,6 @@ function findFileInTree(dir: Directory, path: string): Inode | null {
   }
 
   return current;
-}
-
-/**
- * Add a file to the directory tree at the given path.
- * Creates intermediate directories as needed.
- */
-function addFileToTree(dir: Directory, path: string, file: Inode): void {
-  const parts = path.split('/').filter(p => p.length > 0);
-  const filename = parts.pop();
-  if (!filename) return;
-
-  // Navigate/create directories
-  let current = dir;
-  for (const part of parts) {
-    let next = current.contents.get(part);
-    if (!next) {
-      next = new Directory(new Map());
-      current.contents.set(part, next);
-    }
-    if (!(next instanceof Directory)) {
-      console.error(`[opfs] Path component ${part} is not a directory`);
-      return;
-    }
-    current = next;
-  }
-
-  current.contents.set(filename, file);
 }
 
 /**

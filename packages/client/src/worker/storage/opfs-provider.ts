@@ -1,33 +1,28 @@
 /**
- * OPFS Storage Manager
+ * OPFS Storage Provider
  *
- * Manages Origin Private File System storage for all persistent files.
- * Provides async file handle creation and pre-loading of existing files.
+ * Origin Private File System storage for persistent files.
+ * Files survive page reloads and browser restarts.
  */
 
 import { SyncOPFSFile, Directory, type Inode } from '@bjorn3/browser_wasi_shim';
-
-export interface OpfsStorageConfig {
-  storyId: string;
-}
-
-/** Files that should not be persisted (read-only game files) */
-const READ_ONLY_FILES = new Set(['story.ulx']);
+import { READ_ONLY_FILES, type StorageProvider, type StorageConfig, type FilePromptMetadata, type FilePromptResult } from './types';
+import { generateFilename } from './filename-generator';
 
 /**
- * Manages OPFS directory for persistent files.
+ * OPFS-based storage provider.
  *
  * Directory structure: /wasiglk/[storyId]/
  * Mirrors the WASI filesystem structure.
  */
-export class OpfsStorage {
+export class OpfsProvider implements StorageProvider {
   private rootDir: FileSystemDirectoryHandle | null = null;
   private readonly storyId: string;
-  /** Track all open handles for cleanup */
   private readonly openHandles: FileSystemSyncAccessHandle[] = [];
+  private rootContents: Map<string, Inode> = new Map();
 
-  private constructor(storyId: string) {
-    this.storyId = storyId;
+  constructor(config: StorageConfig) {
+    this.storyId = config.storyId;
   }
 
   /**
@@ -42,32 +37,13 @@ export class OpfsStorage {
    * Check if a path should be persisted to OPFS.
    * Excludes read-only files like story.ulx.
    */
-  static shouldPersist(path: string): boolean {
-    // Get the filename (last component of path)
+  shouldPersist(path: string): boolean {
     const filename = path.split('/').pop() ?? path;
     return !READ_ONLY_FILES.has(filename);
   }
 
-  /**
-   * Create and initialize OPFS storage manager.
-   * Pre-loads existing files from OPFS into a directory structure.
-   *
-   * @returns OpfsStorage instance and root directory contents
-   */
-  static async create(config: OpfsStorageConfig): Promise<{
-    manager: OpfsStorage;
-    rootContents: Map<string, Inode>;
-  }> {
-    const manager = new OpfsStorage(config.storyId);
-    const rootContents = await manager.initialize();
-    return { manager, rootContents };
-  }
-
-  /**
-   * Initialize OPFS directory structure and load existing files.
-   */
-  private async initialize(): Promise<Map<string, Inode>> {
-    const rootContents = new Map<string, Inode>();
+  async initialize(): Promise<Map<string, Inode>> {
+    this.rootContents = new Map();
 
     try {
       // Get OPFS root
@@ -78,17 +54,17 @@ export class OpfsStorage {
       this.rootDir = await wasiglkDir.getDirectoryHandle(this.storyId, { create: true });
 
       // Recursively load all files from OPFS
-      await this.loadDirectory(this.rootDir, rootContents, '');
+      await this.loadDirectory(this.rootDir, this.rootContents, '');
 
       const fileCount = this.openHandles.length;
       console.log(`[opfs] Loaded ${fileCount} existing files for story ${this.storyId}`);
-      console.log(`[opfs] Root contents:`, [...rootContents.keys()]);
+      console.log(`[opfs] Root contents:`, [...this.rootContents.keys()]);
     } catch (err) {
       console.error('[opfs] Initialization failed:', err);
       throw err;
     }
 
-    return rootContents;
+    return this.rootContents;
   }
 
   /**
@@ -122,16 +98,30 @@ export class OpfsStorage {
     }
   }
 
-  /**
-   * Create a new file in OPFS and return its sync access handle.
-   * Supports nested paths like "saves/game.sav".
-   *
-   * @param path - Path to file (relative to WASI root)
-   * @returns FileSystemSyncAccessHandle for the new file
-   */
-  async createFile(path: string): Promise<FileSystemSyncAccessHandle> {
+  async createFile(path: string): Promise<void> {
     if (!this.rootDir) {
-      throw new Error('OpfsStorage not initialized');
+      throw new Error('OpfsProvider not initialized');
+    }
+
+    // Check if file already exists
+    if (this.findFile(path)) {
+      console.log(`[opfs] File already exists: ${path}`);
+      return;
+    }
+
+    const syncHandle = await this.createFileHandle(path);
+    const opfsFile = new SyncOPFSFile(syncHandle);
+    this.addFileToTree(path, opfsFile);
+    console.log(`[opfs] Created persistent file: ${path}`);
+  }
+
+  /**
+   * Create a file handle in OPFS.
+   * Supports nested paths like "saves/game.sav".
+   */
+  private async createFileHandle(path: string): Promise<FileSystemSyncAccessHandle> {
+    if (!this.rootDir) {
+      throw new Error('OpfsProvider not initialized');
     }
 
     // Parse path into directory components and filename
@@ -154,36 +144,63 @@ export class OpfsStorage {
     return syncHandle;
   }
 
-  /**
-   * Delete a file from OPFS.
-   *
-   * @param path - Path to file (relative to WASI root)
-   */
-  async deleteFile(path: string): Promise<void> {
-    if (!this.rootDir) {
-      throw new Error('OpfsStorage not initialized');
-    }
-
-    // Parse path into directory components and filename
-    const parts = path.split('/').filter(p => p.length > 0);
-    const filename = parts.pop();
-    if (!filename) {
-      throw new Error(`Invalid path: ${path}`);
-    }
-
-    // Navigate to parent directory
-    let currentDir = this.rootDir;
-    for (const dirName of parts) {
-      currentDir = await currentDir.getDirectoryHandle(dirName);
-    }
-
-    await currentDir.removeEntry(filename);
+  async handlePrompt(metadata: FilePromptMetadata): Promise<FilePromptResult> {
+    // Auto-generate a deterministic filename (no dialog in OPFS mode)
+    const filename = generateFilename(metadata.filetype);
+    console.log(`[opfs] Auto-generated filename for ${metadata.filetype}: ${filename}`);
+    return { filename };
   }
 
   /**
-   * Close all open file handles.
-   * Should be called when the interpreter terminates to release locks.
+   * Find a file in the root contents by path.
    */
+  private findFile(path: string): Inode | null {
+    const parts = path.split('/').filter(p => p.length > 0);
+    let current: Inode | Map<string, Inode> = this.rootContents;
+
+    for (const part of parts) {
+      if (current instanceof Map) {
+        const entry: Inode | undefined = current.get(part);
+        if (!entry) return null;
+        current = entry;
+      } else if (current instanceof Directory) {
+        const entry: Inode | undefined = current.contents.get(part);
+        if (!entry) return null;
+        current = entry;
+      } else {
+        return null;
+      }
+    }
+
+    return current instanceof Map ? null : current;
+  }
+
+  /**
+   * Add a file to the root contents tree.
+   */
+  private addFileToTree(path: string, file: Inode): void {
+    const parts = path.split('/').filter(p => p.length > 0);
+    const filename = parts.pop();
+    if (!filename) return;
+
+    // Navigate/create directories
+    let current = this.rootContents;
+    for (const part of parts) {
+      let next = current.get(part);
+      if (!next) {
+        next = new Directory(new Map());
+        current.set(part, next);
+      }
+      if (!(next instanceof Directory)) {
+        console.error(`[opfs] Path component ${part} is not a directory`);
+        return;
+      }
+      current = next.contents;
+    }
+
+    current.set(filename, file);
+  }
+
   close(): void {
     for (const handle of this.openHandles) {
       try {

@@ -117,7 +117,33 @@ The client handles:
 - Parsing Blorb files and providing image URLs
 - Converting RemGlk protocol to typed updates
 - Running interpreter in a Web Worker for responsive UI
-- OPFS persistence for save files
+- Configurable file storage (OPFS, file dialogs, or in-memory)
+
+### File Storage
+
+The `filesystem` option controls how save files and other user data are persisted:
+
+```typescript
+const client = await createClient({
+  storyUrl: '/stories/adventure.gblorb',
+  workerUrl: '/worker.js',
+  filesystem: 'auto', // 'auto' | 'opfs' | 'memory' | 'dialog'
+});
+```
+
+| Mode | Description |
+|------|-------------|
+| `'auto'` | (Default) Uses OPFS if available, falls back to in-memory |
+| `'opfs'` | Origin Private File System - persistent storage that survives page reloads. Throws if unavailable. |
+| `'memory'` | In-memory only - files are lost when the page is closed |
+| `'dialog'` | Shows native file dialogs for save/restore, with OPFS for other files. Allows users to save to their local filesystem. |
+
+**When to use each mode:**
+
+- **`'auto'`** - Best for most applications. Saves "just work" without user interaction.
+- **`'opfs'`** - When you need guaranteed persistence and want to fail explicitly if unavailable.
+- **`'memory'`** - For demos, testing, or when you don't want saves to persist.
+- **`'dialog'`** - When users need portable save files they can back up or transfer between devices.
 
 See `packages/example/` for a complete working example. Run it with:
 
@@ -143,7 +169,7 @@ bun run dev
 │  Web Worker                                                     │
 │  - WASM interpreter execution                                   │
 │  - WASI implementation (browser_wasi_shim)                      │
-│  - OPFS persistent storage (saves, autosave)                    │
+│  - Pluggable storage (OPFS, memory, or file dialogs)            │
 │  - JSPI for async stdin                                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -153,8 +179,10 @@ bun run dev
 **Worker for WASM**: Keeps main thread responsive. Heavy interpreter
 computation doesn't block UI.
 
-**OPFS for Persistence**: Origin Private File System provides synchronous
-file access in Workers. Save files persist across page reloads.
+**Pluggable Storage**: File storage is configurable per-client. OPFS provides
+synchronous file access in Workers with persistence across page reloads.
+File dialogs allow users to save to their local filesystem. In-memory mode
+is available for testing or demos.
 
 **JSPI for Input**: JavaScript Promise Integration allows WASM to suspend
 while waiting for user input, without Asyncify code transformation.
@@ -198,6 +226,7 @@ wasiglk/
 │   │   ├── src/
 │   │   │   ├── client.ts   # Main client (Worker communication)
 │   │   │   ├── worker/     # Web Worker implementation
+│   │   │   │   └── storage/ # Pluggable storage providers
 │   │   │   ├── blorb.ts    # Blorb parser
 │   │   │   └── protocol.ts # RemGlk protocol types
 │   │   └── package.json

@@ -22,6 +22,14 @@ export interface ClientConfig {
   format?: StoryFormat;
   /** URL to the worker script (required) */
   workerUrl: string | URL;
+  /**
+   * File system configuration.
+   * - 'auto' (default): OPFS if available, falls back to memory
+   * - 'opfs': OPFS only (throws if unavailable)
+   * - 'memory': In-memory only (no persistence)
+   * - 'dialog': OPFS base + file dialogs for user-prompted saves
+   */
+  filesystem?: 'auto' | 'opfs' | 'memory' | 'dialog';
 }
 
 export interface UpdatesConfig {
@@ -42,6 +50,7 @@ export class WasiGlkClient {
   private updateResolve: ((value: IteratorResult<ClientUpdate>) => void) | null = null;
   private workerUrl: string | URL;
   private storyId: string;
+  private filesystem: 'auto' | 'opfs' | 'memory' | 'dialog';
 
   private constructor(
     storyData: Uint8Array,
@@ -49,7 +58,8 @@ export class WasiGlkClient {
     formatInfo: FormatInfo,
     blorb: BlorbParser | null,
     workerUrl: string | URL,
-    storyId: string
+    storyId: string,
+    filesystem: 'auto' | 'opfs' | 'memory' | 'dialog'
   ) {
     this.storyData = storyData;
     this.interpreterData = interpreterData;
@@ -57,6 +67,7 @@ export class WasiGlkClient {
     this.blorb = blorb;
     this.workerUrl = workerUrl;
     this.storyId = storyId;
+    this.filesystem = filesystem;
   }
 
   static async create(config: ClientConfig): Promise<WasiGlkClient> {
@@ -115,7 +126,7 @@ export class WasiGlkClient {
       ? storyUrl.replace(/[^a-zA-Z0-9]/g, '_')
       : `story_${hashBytes(storyData).toString(16)}`;
 
-    return new WasiGlkClient(executableData, interpreterData, formatInfo, blorb, config.workerUrl, storyId);
+    return new WasiGlkClient(executableData, interpreterData, formatInfo, blorb, config.workerUrl, storyId, config.filesystem ?? 'auto');
   }
 
   get format(): FormatInfo {
@@ -243,6 +254,7 @@ export class WasiGlkClient {
         args: [this.formatInfo.interpreter, 'story.ulx'],
         metrics: config,
         storyId: this.storyId,
+        filesystem: this.filesystem,
       };
       this.worker.postMessage(initMessage, [this.interpreterData]);
 
@@ -305,19 +317,10 @@ export class WasiGlkClient {
       let handle: FileSystemFileHandle;
 
       // Choose picker based on filemode:
-      // - write: showSaveFilePicker (create new or overwrite)
-      // - read/readwrite/writeappend: showOpenFilePicker (must exist)
-      if (filemode === 'write') {
-        // Show save file picker for creating/overwriting files
-        handle = await (window as any).showSaveFilePicker({
-          suggestedName: `file.${extension}`,
-          types: [{
-            description,
-            accept: { 'application/octet-stream': [`.${extension}`] },
-          }],
-        });
-      } else {
-        // Show open file picker for reading or modifying existing files
+      // - read: showOpenFilePicker (select existing file)
+      // - write/readwrite/writeappend: showSaveFilePicker (create new or select existing)
+      if (filemode === 'read') {
+        // Show open file picker for reading existing files
         const [pickedHandle] = await (window as any).showOpenFilePicker({
           types: [{
             description,
@@ -326,6 +329,15 @@ export class WasiGlkClient {
           multiple: false,
         });
         handle = pickedHandle;
+      } else {
+        // Show save file picker for writing (allows creating new files)
+        handle = await (window as any).showSaveFilePicker({
+          suggestedName: `file.${extension}`,
+          types: [{
+            description,
+            accept: { 'application/octet-stream': [`.${extension}`] },
+          }],
+        });
       }
 
       // Send the handle to the worker
