@@ -177,6 +177,10 @@ pub var pending_input_len: usize = 0;
 pub var pending_timer: ?glui32 = null; // Timer interval to include in next update
 pub var pending_timer_set: bool = false; // Whether timer field should be included
 pub var pending_exit: bool = false; // Whether to include exit: true
+// Debug output messages (per GlkOte spec: debugoutput array in updates)
+pub var pending_debug: [16][256]u8 = undefined;
+pub var pending_debug_lens: [16]usize = .{0} ** 16;
+pub var pending_debug_count: usize = 0;
 
 // ============== JSON Protocol Functions ==============
 
@@ -374,6 +378,34 @@ pub fn sendUpdate() void {
         offset += exit_true.len;
     }
 
+    // Add debug output if any (per GlkOte spec: debugoutput array)
+    if (pending_debug_count > 0) {
+        const debug_start = ",\"debugoutput\":[";
+        @memcpy(buf[offset..][0..debug_start.len], debug_start);
+        offset += debug_start.len;
+
+        for (0..pending_debug_count) |i| {
+            if (i > 0) {
+                buf[offset] = ',';
+                offset += 1;
+            }
+            // Escape and add the debug message
+            buf[offset] = '"';
+            offset += 1;
+            var escaped_buf: [512]u8 = undefined;
+            const escaped = jsonEscapeString(pending_debug[i][0..pending_debug_lens[i]], &escaped_buf);
+            if (offset + escaped.len < buf.len) {
+                @memcpy(buf[offset..][0..escaped.len], escaped);
+                offset += escaped.len;
+            }
+            buf[offset] = '"';
+            offset += 1;
+        }
+
+        buf[offset] = ']';
+        offset += 1;
+    }
+
     // Close object
     buf[offset] = '}';
     offset += 1;
@@ -387,6 +419,7 @@ pub fn sendUpdate() void {
     pending_timer = null;
     pending_timer_set = false;
     pending_exit = false;
+    pending_debug_count = 0;
     generation += 1;
 }
 
@@ -479,6 +512,15 @@ pub fn queueTimer(interval: ?glui32) void {
 
 pub fn queueExit() void {
     pending_exit = true;
+}
+
+// Queue a debug message to be included in the next update (per GlkOte spec)
+pub fn queueDebugMessage(message: []const u8) void {
+    if (pending_debug_count >= pending_debug.len) return;
+    const copy_len = @min(message.len, pending_debug[pending_debug_count].len - 1);
+    @memcpy(pending_debug[pending_debug_count][0..copy_len], message[0..copy_len]);
+    pending_debug_lens[pending_debug_count] = copy_len;
+    pending_debug_count += 1;
 }
 
 // ============== Special Update Functions ==============

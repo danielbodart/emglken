@@ -91,3 +91,9 @@ export fn glk_cancel_hyperlink_event(win_opaque: winid_t) callconv(.c) void {
     if (win == null) return;
     win.?.hyperlink_request = false;
 }
+
+// Debug stream support per GlkOte spec
+// Debug output is collected and sent in the debugoutput field of updates
+export fn glk_set_debug_stream(str_opaque: strid_t) callconv(.c) void {
+    state.debug_stream = @ptrCast(@alignCast(str_opaque));
+}

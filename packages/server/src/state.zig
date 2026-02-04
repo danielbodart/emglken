@@ -151,5 +151,10 @@ pub var client_support: struct {
 // Timer state (global, not per-window)
 pub var timer_interval: ?glui32 = null; // null = no timer, value = interval in milliseconds
 
+// Debug output buffer (for debugoutput field in updates per GlkOte spec)
+pub var debug_buffer: [4096]u8 = undefined;
+pub var debug_buffer_len: usize = 0;
+pub var debug_stream: ?*StreamData = null;
+
 // Working directory for glkunix
 pub var workdir: ?[]const u8 = null;

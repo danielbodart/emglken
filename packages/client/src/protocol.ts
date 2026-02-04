@@ -92,6 +92,7 @@ export interface RemGlkUpdate {
   timer?: number | null;  // Timer interval in ms, or null to cancel
   disable?: boolean;  // true when no input is expected (game is processing)
   exit?: boolean;  // true when game has exited
+  debugoutput?: string[];  // Debug messages from the interpreter (per GlkOte spec)
   message?: string;
 }
 
@@ -207,7 +208,8 @@ export type ClientUpdate =
   | ErrorClientUpdate
   | TimerClientUpdate
   | DisableClientUpdate
-  | ExitClientUpdate;
+  | ExitClientUpdate
+  | DebugOutputClientUpdate;
 
 export interface ContentClientUpdate {
   type: 'content';
@@ -271,6 +273,11 @@ export interface DisableClientUpdate {
 export interface ExitClientUpdate {
   type: 'exit';
   // Game has exited
+}
+
+export interface DebugOutputClientUpdate {
+  type: 'debug-output';
+  messages: string[];  // Array of debug messages from the interpreter
 }
 
 /**
@@ -371,6 +378,14 @@ export function parseRemGlkUpdate(
   if (update.exit) {
     clientUpdates.push({
       type: 'exit',
+    });
+  }
+
+  // Handle debug output (per GlkOte spec)
+  if (update.debugoutput && update.debugoutput.length > 0) {
+    clientUpdates.push({
+      type: 'debug-output',
+      messages: update.debugoutput,
     });
   }
 

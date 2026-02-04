@@ -311,11 +311,19 @@ Currently: File dialogs not implemented.
 
 ---
 
-### [ ] 25. Debug Output Not Sent
+### [x] 25. Debug Output Now Implemented (FIXED)
+
+**Location:** `packages/server/src/protocol.zig`, `packages/server/src/style.zig`, `packages/server/src/state.zig`, `packages/client/src/protocol.ts`
 
 **Spec:** Update can include `debugoutput: ["debug message", ...]`
 
-Currently: Not implemented.
+**Fixed:**
+1. Added `debug_buffer`, `debug_buffer_len`, `debug_stream` to state.zig
+2. Added `glk_set_debug_stream()` to style.zig
+3. Added `pending_debug` arrays and `queueDebugMessage()` to protocol.zig
+4. Modified `sendUpdate()` to include `debugoutput` array when debug messages are queued
+5. Added `debugoutput` field to RemGlkUpdate interface in protocol.ts
+6. Added `DebugOutputClientUpdate` type and parsing in parseRemGlkUpdate()
 
 ---
 
@@ -436,7 +444,7 @@ Fields that should be included in input requests but aren't.
 14. ~~Remaining input fields (#26-30)~~ ✅ FIXED - terminators (#26), hyperlink (#27), mouse (#28), xpos/ypos (#29), initial (#30) all implemented
 15. ~~Debug input events (#17)~~ ✅ FIXED - acknowledged with evtype.None
 16. ~~External events (#18)~~ ✅ FIXED - acknowledged with evtype.None
-17. Debug output (#25) - optional feature
+17. ~~Debug output (#25)~~ ✅ FIXED
 17. ~~Partial input (#20)~~ ✅ FIXED - partial text captured from interrupted input
 
 ---
