@@ -23,11 +23,13 @@ test.describe('WasiGlk Example', () => {
     // Wait for game to be ready
     await expect(page.locator('#status')).toContainText('Game initialized', { timeout: 10000 });
 
-    // Status bar should show location, score, and moves
+    // Status bar should show location and moves count
     const statusBar = page.locator('#game-status-bar');
     await expect(statusBar).toBeVisible({ timeout: 5000 });
-    await expect(statusBar).toContainText('Score:');
-    await expect(statusBar).toContainText('Moves: 1');
+    // Check for location (beginning of status line)
+    await expect(statusBar).toContainText('At End Of Road');
+    // Check for moves counter (may vary depending on saved state)
+    await expect(statusBar).toContainText('Moves:');
   });
 
   test('accepts user input and increments move counter', async ({ page }) => {

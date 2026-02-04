@@ -28,6 +28,15 @@ pub const WindowData = struct {
     parent: ?*WindowData = null,
     child1: ?*WindowData = null,
     child2: ?*WindowData = null,
+    // Pair window split parameters (only used for pair windows)
+    split_method: glui32 = 0, // winmethod_* flags
+    split_size: glui32 = 0, // size constraint
+    split_key: ?*WindowData = null, // key window for proportional/fixed split
+    // Calculated layout position (in pixels, updated by layout calculation)
+    layout_left: f64 = 0,
+    layout_top: f64 = 0,
+    layout_width: f64 = 0,
+    layout_height: f64 = 0,
     // Input state
     char_request: bool = false,
     line_request: bool = false,

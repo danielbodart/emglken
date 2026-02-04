@@ -158,7 +158,15 @@ async function main(): Promise<void> {
     setStatus('Starting interpreter...', 'info');
 
     // Run the interpreter and handle updates
-    for await (const update of client.updates({ width: 80, height: 24 })) {
+    // Use the output container dimensions (pixels) for proper window layout
+    const outputRect = outputEl.getBoundingClientRect();
+    const metrics = {
+      width: Math.floor(outputRect.width) || 800,
+      height: Math.floor(outputRect.height) || 600,
+      charWidth: 10,  // Approximate character width in pixels
+      charHeight: 18, // Approximate character height in pixels
+    };
+    for await (const update of client.updates(metrics)) {
       handleUpdate(update);
     }
 

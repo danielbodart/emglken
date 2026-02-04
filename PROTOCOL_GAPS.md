@@ -109,13 +109,18 @@ These are cases where wasiglk sends data in a different format than the spec req
 
 ---
 
-### [ ] 8. Window Positions Always Zero
+### [x] 8. Window Positions Now Calculated (FIXED)
 
-**Location:** `packages/server/src/protocol.zig:176-185`
+**Location:** `packages/server/src/window.zig`, `packages/server/src/protocol.zig`, `packages/server/src/state.zig`
 
-**Current:** `left` and `top` always set to 0.
-
-**Spec:** Should reflect actual window layout positions for proper rendering.
+**Fixed:** Window positions are now calculated based on the Glk pair window tree:
+1. Added `split_method`, `split_size`, `split_key` fields to WindowData for pair windows
+2. Added `layout_left`, `layout_top`, `layout_width`, `layout_height` fields to all windows
+3. `glk_window_open` now creates proper pair windows when splitting
+4. `recalculateLayout()` traverses the window tree and computes positions
+5. `queueWindowUpdate()` uses calculated layout positions
+6. `glk_window_get_size()` returns calculated dimensions
+7. `glk_window_set_arrangement()` and `glk_window_get_arrangement()` now work properly
 
 ---
 
@@ -427,7 +432,7 @@ Fields that should be included in input requests but aren't.
 
 ### Low Priority (Polish)
 12. ~~Metrics completeness (#9)~~ ✅ FIXED - all GlkOte spec metrics fields added
-13. Window positions (#8)
+13. ~~Window positions (#8)~~ ✅ FIXED - pair window tree layout implemented
 14. ~~Remaining input fields (#26-30)~~ ✅ FIXED - terminators (#26), hyperlink (#27), mouse (#28), xpos/ypos (#29), initial (#30) all implemented
 15. ~~Debug input events (#17)~~ ✅ FIXED - acknowledged with evtype.None
 16. ~~External events (#18)~~ ✅ FIXED - acknowledged with evtype.None

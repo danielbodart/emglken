@@ -19,14 +19,13 @@ export fn glk_window_get_root() callconv(.c) winid_t {
     return @ptrCast(state.root_window);
 }
 
-export fn glk_window_open(split: winid_t, method: glui32, size: glui32, win_type: glui32, rock: glui32) callconv(.c) winid_t {
-    _ = split;
-    _ = method;
-    _ = size;
+export fn glk_window_open(split_opaque: winid_t, method: glui32, size: glui32, win_type: glui32, rock: glui32) callconv(.c) winid_t {
+    const split_win: ?*WindowData = @ptrCast(@alignCast(split_opaque));
 
     // Output init message on first window open
     protocol.ensureGlkInitialized();
 
+    // Create the new window
     const win = allocator.create(WindowData) catch return null;
     win.* = WindowData{
         .id = state.window_id_counter,
@@ -54,7 +53,7 @@ export fn glk_window_open(split: winid_t, method: glui32, size: glui32, win_type
         @memset(win.grid_dirty.?, false);
     }
 
-    // Add to list
+    // Add to window list
     win.next = state.window_list;
     if (state.window_list) |list| list.prev = win;
     state.window_list = win;
@@ -62,10 +61,67 @@ export fn glk_window_open(split: winid_t, method: glui32, size: glui32, win_type
     // Create window stream
     win.stream = stream.createWindowStream(win);
 
-    if (state.root_window == null) {
+    if (split_win == null) {
+        // First window - becomes the root
         state.root_window = win;
-        // Set the first window's stream as current by default
         state.current_stream = win.stream;
+    } else {
+        // Split an existing window - create a pair window
+        const pair = allocator.create(WindowData) catch {
+            // Cleanup on failure
+            if (win.grid_buffer) |buf| allocator.destroy(buf);
+            if (win.grid_dirty) |dirty| allocator.destroy(dirty);
+            allocator.destroy(win);
+            return null;
+        };
+        pair.* = WindowData{
+            .id = state.window_id_counter,
+            .rock = 0,
+            .win_type = types.wintype.Pair,
+            .split_method = method,
+            .split_size = size,
+            .split_key = win, // The new window is the key window
+        };
+        state.window_id_counter += 1;
+
+        // Add pair to window list
+        pair.next = state.window_list;
+        if (state.window_list) |list| list.prev = pair;
+        state.window_list = pair;
+
+        // Insert pair into the tree where split_win was
+        pair.parent = split_win.?.parent;
+        if (split_win.?.parent) |parent| {
+            if (parent.child1 == split_win.?) {
+                parent.child1 = pair;
+            } else {
+                parent.child2 = pair;
+            }
+        } else {
+            // split_win was root
+            state.root_window = pair;
+        }
+
+        // The direction determines which child is which
+        // Left/Above: new window is child1, old is child2
+        // Right/Below: old window is child1, new is child2
+        const dir = method & types.winmethod.DirMask;
+        if (dir == types.winmethod.Left or dir == types.winmethod.Above) {
+            pair.child1 = win;
+            pair.child2 = split_win.?;
+        } else {
+            pair.child1 = split_win.?;
+            pair.child2 = win;
+        }
+
+        // Update parent pointers
+        win.parent = pair;
+        split_win.?.parent = pair;
+
+        // Register pair with dispatch system
+        if (dispatch.object_register_fn) |register_fn| {
+            pair.dispatch_rock = register_fn(@ptrCast(pair), dispatch.gidisp_Class_Window);
+        }
     }
 
     // Register with dispatch system
@@ -73,8 +129,11 @@ export fn glk_window_open(split: winid_t, method: glui32, size: glui32, win_type
         win.dispatch_rock = register_fn(@ptrCast(win), dispatch.gidisp_Class_Window);
     }
 
-    // Queue window creation update
-    protocol.queueWindowUpdate(win);
+    // Recalculate window layout
+    recalculateLayout();
+
+    // Queue window updates for all visible windows
+    queueAllWindowUpdates();
     protocol.sendUpdate();
 
     return @ptrCast(win);
@@ -125,23 +184,72 @@ export fn glk_window_close(win_opaque: winid_t, result: ?*stream_result_t) callc
 }
 
 export fn glk_window_get_size(win_opaque: winid_t, widthptr: ?*glui32, heightptr: ?*glui32) callconv(.c) void {
-    _ = win_opaque;
-    if (widthptr) |w| w.* = 80;
-    if (heightptr) |h| h.* = 24;
+    const win: ?*WindowData = @ptrCast(@alignCast(win_opaque));
+    if (win) |w| {
+        // For grid/buffer windows, return size in character cells
+        // For graphics windows, return size in pixels
+        if (w.win_type == types.wintype.TextGrid or w.win_type == types.wintype.TextBuffer) {
+            // TODO: Use actual character metrics
+            const char_width: u32 = 1;
+            const char_height: u32 = 1;
+            if (widthptr) |wp| wp.* = if (w.layout_width > 0) @intFromFloat(w.layout_width / @as(f64, @floatFromInt(char_width))) else 80;
+            if (heightptr) |hp| hp.* = if (w.layout_height > 0) @intFromFloat(w.layout_height / @as(f64, @floatFromInt(char_height))) else 24;
+        } else {
+            // Graphics/other windows: return pixel dimensions
+            if (widthptr) |wp| wp.* = if (w.layout_width > 0) @intFromFloat(w.layout_width) else 80;
+            if (heightptr) |hp| hp.* = if (w.layout_height > 0) @intFromFloat(w.layout_height) else 24;
+        }
+    } else {
+        // Fallback for null window
+        if (widthptr) |wp| wp.* = 80;
+        if (heightptr) |hp| hp.* = 24;
+    }
 }
 
-export fn glk_window_set_arrangement(win: winid_t, method: glui32, size: glui32, keywin: winid_t) callconv(.c) void {
-    _ = win;
-    _ = method;
-    _ = size;
-    _ = keywin;
+export fn glk_window_set_arrangement(win_opaque: winid_t, method: glui32, size: glui32, keywin_opaque: winid_t) callconv(.c) void {
+    const win: ?*WindowData = @ptrCast(@alignCast(win_opaque));
+    const keywin: ?*WindowData = @ptrCast(@alignCast(keywin_opaque));
+    if (win == null) return;
+    const w = win.?;
+
+    // Only valid for pair windows
+    if (w.win_type != types.wintype.Pair) return;
+
+    w.split_method = method;
+    w.split_size = size;
+    if (keywin != null) {
+        w.split_key = keywin;
+    }
+
+    // Recalculate layout after arrangement change
+    recalculateLayout();
+
+    // Queue window updates for all visible windows
+    queueAllWindowUpdates();
+    protocol.sendUpdate();
 }
 
-export fn glk_window_get_arrangement(win: winid_t, methodptr: ?*glui32, sizeptr: ?*glui32, keywinptr: ?*winid_t) callconv(.c) void {
-    _ = win;
-    if (methodptr) |m| m.* = 0;
-    if (sizeptr) |s| s.* = 0;
-    if (keywinptr) |k| k.* = null;
+export fn glk_window_get_arrangement(win_opaque: winid_t, methodptr: ?*glui32, sizeptr: ?*glui32, keywinptr: ?*winid_t) callconv(.c) void {
+    const win: ?*WindowData = @ptrCast(@alignCast(win_opaque));
+    if (win == null) {
+        if (methodptr) |m| m.* = 0;
+        if (sizeptr) |s| s.* = 0;
+        if (keywinptr) |k| k.* = null;
+        return;
+    }
+    const w = win.?;
+
+    // Only valid for pair windows
+    if (w.win_type != types.wintype.Pair) {
+        if (methodptr) |m| m.* = 0;
+        if (sizeptr) |s| s.* = 0;
+        if (keywinptr) |k| k.* = null;
+        return;
+    }
+
+    if (methodptr) |m| m.* = w.split_method;
+    if (sizeptr) |s| s.* = w.split_size;
+    if (keywinptr) |k| k.* = @ptrCast(w.split_key);
 }
 
 export fn glk_window_iterate(win_opaque: winid_t, rockptr: ?*glui32) callconv(.c) winid_t {
@@ -252,5 +360,90 @@ export fn glk_set_window(win_opaque: winid_t) callconv(.c) void {
         state.current_stream = w.stream;
     } else {
         state.current_stream = null;
+    }
+}
+
+// ============== Layout Calculation ==============
+
+/// Recalculate the layout of all windows based on the current tree structure
+pub fn recalculateLayout() void {
+    if (state.root_window) |root| {
+        // Start with the full display area
+        const width: f64 = @floatFromInt(state.client_metrics.width);
+        const height: f64 = @floatFromInt(state.client_metrics.height);
+        layoutWindow(root, 0, 0, width, height);
+    }
+}
+
+/// Recursively layout a window within the given bounds
+fn layoutWindow(win: *WindowData, left: f64, top: f64, width: f64, height: f64) void {
+    win.layout_left = left;
+    win.layout_top = top;
+    win.layout_width = width;
+    win.layout_height = height;
+
+    // If this is a pair window, split the space between children
+    if (win.win_type == types.wintype.Pair) {
+        const child1 = win.child1 orelse return;
+        const child2 = win.child2 orelse return;
+
+        const dir = win.split_method & types.winmethod.DirMask;
+        const division = win.split_method & types.winmethod.DivisionMask;
+        const size = win.split_size;
+
+        // Determine the split size in pixels
+        var key_size: f64 = 0;
+        if (division == types.winmethod.Fixed) {
+            // Fixed: size is in pixels (or character cells for text windows)
+            // For now, treat as pixels - can be refined with metrics
+            key_size = @floatFromInt(size);
+        } else {
+            // Proportional: size is a percentage (0-100)
+            const total = if (dir == types.winmethod.Left or dir == types.winmethod.Right) width else height;
+            key_size = total * @as(f64, @floatFromInt(size)) / 100.0;
+        }
+
+        // Split based on direction
+        switch (dir) {
+            types.winmethod.Left => {
+                // child1 (key) on left, child2 on right
+                const c1_width = @min(key_size, width);
+                layoutWindow(child1, left, top, c1_width, height);
+                layoutWindow(child2, left + c1_width, top, width - c1_width, height);
+            },
+            types.winmethod.Right => {
+                // child1 on left, child2 (key) on right
+                const c2_width = @min(key_size, width);
+                layoutWindow(child1, left, top, width - c2_width, height);
+                layoutWindow(child2, left + width - c2_width, top, c2_width, height);
+            },
+            types.winmethod.Above => {
+                // child1 (key) on top, child2 on bottom
+                const c1_height = @min(key_size, height);
+                layoutWindow(child1, left, top, width, c1_height);
+                layoutWindow(child2, left, top + c1_height, width, height - c1_height);
+            },
+            types.winmethod.Below => {
+                // child1 on top, child2 (key) on bottom
+                const c2_height = @min(key_size, height);
+                layoutWindow(child1, left, top, width, height - c2_height);
+                layoutWindow(child2, left, top + height - c2_height, width, c2_height);
+            },
+            else => {
+                // Unknown direction, give all space to child1
+                layoutWindow(child1, left, top, width, height);
+            },
+        }
+    }
+}
+
+/// Queue window updates for all non-pair windows
+fn queueAllWindowUpdates() void {
+    var win = state.window_list;
+    while (win) |w| : (win = w.next) {
+        // Only send updates for non-pair windows
+        if (w.win_type != types.wintype.Pair) {
+            protocol.queueWindowUpdate(w);
+        }
     }
 }

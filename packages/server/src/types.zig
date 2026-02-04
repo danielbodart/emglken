@@ -97,6 +97,23 @@ pub const wintype = struct {
     pub const Graphics: glui32 = 5;
 };
 
+pub const winmethod = struct {
+    // Direction constants
+    pub const Left: glui32 = 0x00;
+    pub const Right: glui32 = 0x01;
+    pub const Above: glui32 = 0x02;
+    pub const Below: glui32 = 0x03;
+    pub const DirMask: glui32 = 0x0f;
+    // Division method
+    pub const Fixed: glui32 = 0x10;
+    pub const Proportional: glui32 = 0x20;
+    pub const DivisionMask: glui32 = 0xf0;
+    // Border
+    pub const Border: glui32 = 0x000;
+    pub const NoBorder: glui32 = 0x100;
+    pub const BorderMask: glui32 = 0x100;
+};
+
 pub const fileusage = struct {
     pub const Data: glui32 = 0x00;
     pub const SavedGame: glui32 = 0x01;

@@ -402,18 +402,32 @@ pub fn queueWindowUpdate(win: *WindowData) void {
         wintype.Graphics => .graphics,
         else => .buffer,
     };
+
+    // Use calculated layout dimensions
+    const width = win.layout_width;
+    const height = win.layout_height;
+
+    // For grid windows, calculate character cell dimensions
+    // Using gridcharwidth/gridcharheight if available, fallback to 1 char = 1 pixel
+    const grid_char_w: u32 = 1; // TODO: use actual metrics
+    const grid_char_h: u32 = 1;
+    const grid_width: u32 = if (width > 0) @intFromFloat(width / @as(f64, @floatFromInt(grid_char_w))) else 80;
+    const grid_height: u32 = if (height > 0) @intFromFloat(height / @as(f64, @floatFromInt(grid_char_h))) else 24;
+
     pending_windows[pending_windows_len] = .{
         .id = win.id,
         .type = wtype,
         .rock = win.rock,
-        .width = @floatFromInt(state.client_metrics.width),
-        .height = @floatFromInt(state.client_metrics.height),
+        .left = win.layout_left,
+        .top = win.layout_top,
+        .width = width,
+        .height = height,
         // Grid windows: dimensions in character cells
-        .gridwidth = if (wtype == .grid) state.client_metrics.width else null,
-        .gridheight = if (wtype == .grid) state.client_metrics.height else null,
+        .gridwidth = if (wtype == .grid) grid_width else null,
+        .gridheight = if (wtype == .grid) grid_height else null,
         // Graphics windows: canvas dimensions in pixels
-        .graphwidth = if (wtype == .graphics) state.client_metrics.width else null,
-        .graphheight = if (wtype == .graphics) state.client_metrics.height else null,
+        .graphwidth = if (wtype == .graphics) @as(u32, @intFromFloat(width)) else null,
+        .graphheight = if (wtype == .graphics) @as(u32, @intFromFloat(height)) else null,
     };
     pending_windows_len += 1;
 }
@@ -832,8 +846,8 @@ fn sendStyledBufferTextUpdate(win_id: u32, text: []const u8, clear: bool, style:
         offset += hyper_json.len;
     }
 
-    // Close all brackets
-    const footer = "}}]}}]}}]}}";
+    // Close all brackets: span} spans] paragraph} text] content_obj} content_array] update}
+    const footer = "}]}]}]}";
     @memcpy(buf[offset..][0..footer.len], footer);
     offset += footer.len;
 

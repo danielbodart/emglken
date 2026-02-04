@@ -171,8 +171,8 @@ async function runInterpreter(msg: MainToWorkerMessage & { type: 'init' }): Prom
       }
     });
 
-    // stderr
-    const stderr = ConsoleStdout.lineBuffered(line => console.error('[interpreter]', line));
+    // stderr - use console.debug for debug messages from the interpreter
+    const stderr = ConsoleStdout.lineBuffered(line => console.debug('[interpreter]', line));
 
     // Initialize OPFS for persistent storage (if available)
     let opfsStorage: OpfsStorage | null = null;
