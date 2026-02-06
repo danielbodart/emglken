@@ -859,17 +859,11 @@ fn buildFizmo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         .root_module = b.createModule(.{ .target = target, .optimize = optimize }),
     });
 
-    // Force-include the compat header to provide locale stubs and other declarations
-    const compat_header_path = b.path("src/fizmo_compat.h").getPath(b);
-
     const fizmo_flags: []const []const u8 = &.{
         "-DDISABLE_BABEL",
         "-DDISABLE_CONFIGFILES",
         "-DDISABLE_FILELIST",
         "-DDISABLE_COMMAND_HISTORY",
-        "-D_WASI_EMULATED_SIGNAL",
-        "-include",
-        compat_header_path,
         "-Wall",
         "-Wno-unused-but-set-variable",
         "-Wno-unused-variable",
@@ -969,10 +963,6 @@ fn buildFizmo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.bui
         .flags = fizmo_flags,
     });
 
-    // Include paths - fizmo_include must come first to override <signal.h> with sigaction compat
-    // Use -isystem via addSystemIncludePath won't work (lower priority than sysroot)
-    // Instead we use a C flag to add it as a system include before sysroot
-    exe.addIncludePath(b.path("src/fizmo_include"));
     exe.addIncludePath(b.path("../libfizmo/src"));
     exe.addIncludePath(b.path("../libglkif/src"));
 

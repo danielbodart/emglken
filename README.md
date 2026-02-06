@@ -21,7 +21,6 @@ The combination of Zig, WASI, JSPI, and wasm-opt produces dramatically smaller b
 |-------------|---------|---------|-----------|
 | glulxe.wasm | 1.68 MB | 240 KB | **86% smaller** |
 | git.wasm | 1.68 MB | 249 KB | **85% smaller** |
-| fizmo.wasm | N/A | 230 KB | New (Z-machine) |
 | hugo.wasm | 1.12 MB | 207 KB | **82% smaller** |
 | scare.wasm | 1.82 MB | 447 KB | **76% smaller** |
 
@@ -54,6 +53,7 @@ The `./run` script auto-installs all required tools (Zig, Bun, wasi-sdk) on firs
 | [Alan2](https://github.com/garglk/garglk) | C | Alan 2 | .acd | [Artistic-2.0](https://github.com/garglk/garglk/blob/master/licenses/Artistic%20License%202.0.txt) | ✅ | ✅ |
 | [Alan3](https://github.com/garglk/garglk) | C | Alan 3 | .a3c | [Artistic-2.0](https://github.com/garglk/garglk/blob/master/licenses/Artistic%20License%202.0.txt) | ✅ | ✅ |
 | [Bocfel](https://github.com/garglk/garglk) | C++ | Z-machine | .z3-.z8 | [MIT](https://github.com/garglk/garglk/blob/master/licenses/MIT%20License.txt) | ❌ (C++ exceptions) | ✅ |
+| [Fizmo](https://github.com/danielbodart/libfizmo) | C | Z-machine (v1-5, 7, 8) | .z1-.z5, .z7, .z8, .zblorb | [BSD-3-Clause](https://github.com/chrender/fizmo/blob/master/LICENSE) | ✅ | ✅ |
 | [Git](https://github.com/DavidKinder/Git) | C | Glulx | .ulx, .gblorb | [MIT](https://github.com/DavidKinder/Git/blob/master/LICENSE) | ✅ | ✅ |
 | [Glulxe](https://github.com/erkyrath/glulxe) | C | Glulx | .ulx, .gblorb | [MIT](https://github.com/erkyrath/glulxe/blob/master/LICENSE) | ✅ | ✅ |
 | [Hugo](https://github.com/hugoif/hugo-unix) | C | Hugo | .hex | [BSD-2-Clause](https://github.com/hugoif/hugo-unix/blob/master/License.txt) | ✅ | ✅ |

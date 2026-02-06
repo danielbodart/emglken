@@ -15,7 +15,7 @@
 	url = https://github.com/madler/zlib.git
 [submodule "packages/libfizmo"]
 	path = packages/libfizmo
-	url = https://github.com/chrender/libfizmo.git
+	url = https://github.com/danielbodart/libfizmo.git
 [submodule "packages/libglkif"]
 	path = packages/libglkif
 	url = https://github.com/chrender/libglkif.git
