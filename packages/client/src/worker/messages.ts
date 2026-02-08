@@ -2,44 +2,16 @@
  * Worker Message Types
  */
 
-import type { RemGlkUpdate } from '../protocol';
+import type { Metrics, RemGlkUpdate } from '../protocol';
 import type { FilesystemMode } from './storage';
 
 export type { FilesystemMode };
 
-/** Metrics passed to the worker */
-export interface WorkerMetrics {
-  // Overall dimensions
-  width: number;
-  height: number;
-  // Generic character dimensions
-  charWidth?: number;
-  charHeight?: number;
-  // Outer/inner spacing
-  outSpacingX?: number;
-  outSpacingY?: number;
-  inSpacingX?: number;
-  inSpacingY?: number;
-  // Grid window character dimensions and margins
-  gridCharWidth?: number;
-  gridCharHeight?: number;
-  gridMarginX?: number;
-  gridMarginY?: number;
-  // Buffer window character dimensions and margins
-  bufferCharWidth?: number;
-  bufferCharHeight?: number;
-  bufferMarginX?: number;
-  bufferMarginY?: number;
-  // Graphics window margins
-  graphicsMarginX?: number;
-  graphicsMarginY?: number;
-}
-
 /** Messages from main thread to worker */
 export type MainToWorkerMessage =
-  | { type: 'init'; interpreter: ArrayBuffer; story: Uint8Array; args: string[]; metrics: WorkerMetrics; storyId: string; filesystem: FilesystemMode }
+  | { type: 'init'; interpreter: ArrayBuffer; story: Uint8Array; args: string[]; metrics: Metrics; support?: string[]; storyId: string; filesystem: FilesystemMode }
   | { type: 'input'; value: string }
-  | { type: 'arrange'; metrics: WorkerMetrics }
+  | { type: 'arrange'; metrics: Metrics }
   | { type: 'mouse'; windowId: number; x: number; y: number }
   | { type: 'hyperlink'; windowId: number; linkValue: number }
   | { type: 'redraw'; windowId?: number }

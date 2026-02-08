@@ -56,7 +56,7 @@
 
 // Main client API
 export { WasiGlkClient, createClient } from './client';
-export type { ClientConfig, UpdatesConfig } from './client';
+export type { ClientConfig } from './client';
 
 // Protocol types (raw RemGlk protocol)
 export type {

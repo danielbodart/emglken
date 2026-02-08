@@ -161,8 +161,8 @@ async function main(): Promise<void> {
       metrics: {
         width: Math.floor(outputRect.width) || 800,
         height: Math.floor(outputRect.height) || 600,
-        charWidth: 10,
-        charHeight: 18,
+        charwidth: 10,
+        charheight: 18,
       },
     });
 

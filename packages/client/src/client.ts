@@ -6,7 +6,7 @@
 
 import { BlorbParser } from './blorb';
 import { detectFormat, type FormatInfo, type StoryFormat } from './format';
-import type { RemGlkUpdate } from './protocol';
+import type { Metrics, RemGlkUpdate } from './protocol';
 import type { MainToWorkerMessage, WorkerToMainMessage } from './worker/messages';
 
 /** Configuration for creating a WasiGlk client instance. */
@@ -32,15 +32,9 @@ export interface ClientConfig {
    */
   filesystem?: 'auto' | 'opfs' | 'memory' | 'dialog';
   /** Display metrics for the interpreter output area. */
-  metrics?: UpdatesConfig;
-}
-
-/** Display metrics for the interpreter output area. */
-export interface UpdatesConfig {
-  width: number;
-  height: number;
-  charWidth?: number;
-  charHeight?: number;
+  metrics?: Metrics;
+  /** Features the display supports (per GlkOte spec). Defaults to ['timer', 'graphics', 'graphicswin', 'hyperlinks']. */
+  support?: string[];
 }
 
 /**
@@ -65,7 +59,8 @@ export class WasiGlkClient {
   private workerUrl: string | URL;
   private storyId: string;
   private filesystem: 'auto' | 'opfs' | 'memory' | 'dialog';
-  private metrics: UpdatesConfig;
+  private metrics: Metrics;
+  private support?: string[];
 
   private constructor(
     storyData: Uint8Array,
@@ -75,7 +70,8 @@ export class WasiGlkClient {
     workerUrl: string | URL,
     storyId: string,
     filesystem: 'auto' | 'opfs' | 'memory' | 'dialog',
-    metrics: UpdatesConfig,
+    metrics: Metrics,
+    support?: string[],
   ) {
     this.storyData = storyData;
     this.interpreterData = interpreterData;
@@ -85,6 +81,7 @@ export class WasiGlkClient {
     this.storyId = storyId;
     this.filesystem = filesystem;
     this.metrics = metrics;
+    this.support = support;
   }
 
   /**
@@ -152,7 +149,7 @@ export class WasiGlkClient {
     const versionHash = hashBytes(storyData).toString(16).padStart(8, '0');
     const storyId = `${gameName}/${versionHash}`;
 
-    return new WasiGlkClient(executableData, interpreterData, formatInfo, blorb, config.workerUrl, storyId, config.filesystem ?? 'auto', config.metrics ?? { width: 80, height: 24 });
+    return new WasiGlkClient(executableData, interpreterData, formatInfo, blorb, config.workerUrl, storyId, config.filesystem ?? 'auto', config.metrics ?? { width: 80, height: 24 }, config.support);
   }
 
   /** The detected format and interpreter for the loaded story. */
@@ -195,15 +192,10 @@ export class WasiGlkClient {
    * Send an arrange event to notify the interpreter of window resize.
    * This should be called when the display dimensions change.
    */
-  sendArrange(metrics: UpdatesConfig): void {
+  sendArrange(metrics: Metrics): void {
     this.worker?.postMessage({
       type: 'arrange',
-      metrics: {
-        width: metrics.width,
-        height: metrics.height,
-        charWidth: metrics.charWidth,
-        charHeight: metrics.charHeight,
-      },
+      metrics,
     } satisfies MainToWorkerMessage);
   }
 
@@ -311,6 +303,7 @@ export class WasiGlkClient {
         story: this.storyData,
         args: [this.formatInfo.interpreter, '/sys/story.ulx'],
         metrics: this.metrics,
+        support: this.support,
         storyId: this.storyId,
         filesystem: this.filesystem,
       };
